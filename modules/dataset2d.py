@@ -12,6 +12,7 @@ class Dataset2D:
 
     def init_shaders(self, parent, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
         self.program = QOpenGLShaderProgram(parent)
+        self.parent = parent
 
         # Read shader code from source
         with open(vertex_shader, 'r') as vs, open(fragment_shader) as fs:
@@ -89,6 +90,10 @@ class Dataset2D:
         gl.glUniform1f(self.program.uniformLocation('point_size'), 8)
         self.program.release()
 
+        self.projection = QMatrix4x4()
+        # projection_location = self.program.uniformLocation('projection');
+        # self.program.setUniformValue(projection_location, projection)
+
     def update_Y(self, Y):
         self.Y = Y
         Y_32 = np.array(self.Y, dtype=np.float32)
@@ -108,6 +113,7 @@ class Dataset2D:
     def draw(self, gl):
         self.vao.bind()
         self.program.bind()
+        self.program.setUniformValue('camera', self.parent.camera)
         gl.glDrawArrays(gl.GL_POINTS, 0, self.Y.shape[0])
         self.program.release()
         self.vao.release()

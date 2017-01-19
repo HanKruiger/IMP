@@ -11,6 +11,7 @@ class ImpApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.show()
         self.init_ui()
 
         Y = np.random.random((10000, 2)) * 2 - 1
@@ -28,7 +29,7 @@ class ImpApp(QMainWindow):
         change_action.triggered.connect(self.do_something)
         self.toolbar.addAction(change_action)
         
-        quit_action = QAction('&Quit', self)  # The '&' signifies the via-menu keyboard shortcut (Alt+E in this case)
+        quit_action = QAction('&Quit', self)
         quit_action.setShortcut('q')
         quit_action.setStatusTip('Quit application')
         quit_action.triggered.connect(qApp.quit)
@@ -36,8 +37,6 @@ class ImpApp(QMainWindow):
 
         self.center()
         self.setWindowTitle('IMP: Interactive Multidimensional Projections')
-
-        self.show()
 
     def do_something(self):
         Y = np.random.random((np.random.choice([1000000, 1000]), 2)) * 2 - 1

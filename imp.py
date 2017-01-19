@@ -18,6 +18,6 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    example = ImpApp()
+    imp = ImpApp()
 
     sys.exit(app.exec_())

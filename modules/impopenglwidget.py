@@ -7,11 +7,40 @@ class ImpOpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(ImpOpenGLWidget, self).__init__(parent)
         self.objects = []
+        self.camera = QMatrix4x4()
 
     def add_object(self, o):
         self.objects.append(o)
         o.init_shaders(self)
         o.init_buffers(self.gl)
+
+    def mousePressEvent(self, event):
+        print('{}, {}'.format(event.x() / self.width(), event.y() / self.height()))
+
+    def wheelEvent(self, event):
+        factor = 1.2
+        if event.angleDelta().y() < 0:
+            factor = 1 / factor
+
+        # Manually transform from pixel coords to -1 - +1 coordinates.
+        p = QVector3D(event.x() / self.width(), event.y() / self.height(), 0)
+        p *= 2
+        p -= QVector3D(1, 1, 0)
+        p.setY(-p.y())
+
+        # Perform the inverse of the camera projection
+        camera_i, invertible = self.camera.inverted()
+        if not invertible:
+            print('Camera matrix is not invertible.')
+            return
+
+        # TODO: Zoom s.t. mouse stays on same point!
+        p = camera_i.mapVector(p)
+        self.camera.translate(p)
+        self.camera.scale(factor)
+        self.camera.translate(-p)
+
+        self.update()
 
     def minimumSizeHint(self):
         return QSize(50, 50)
