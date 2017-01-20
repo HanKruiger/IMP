@@ -14,7 +14,7 @@ class ImpApp(QMainWindow):
         self.show()
         self.init_ui()
 
-        Y = np.random.random((10000, 2)) * 2 - 1
+        Y = np.random.random((10000, 2))
         self.d2d = Dataset2D(Y)
         self.gl_widget.add_object(self.d2d)
 
@@ -39,7 +39,7 @@ class ImpApp(QMainWindow):
         self.setWindowTitle('IMP: Interactive Multidimensional Projections')
 
     def do_something(self):
-        Y = np.random.random((np.random.choice([1000000, 1000]), 2)) * 2 - 1
+        Y = np.random.random((np.random.choice([1000000, 1000]), 2))
         self.d2d.update_Y(Y)
 
         # Schedule redraw

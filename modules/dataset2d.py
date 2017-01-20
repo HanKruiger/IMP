@@ -8,28 +8,22 @@ class Dataset2D:
 
     def __init__(self, Y):
         self.Y = Y
-        self.colors = np.random.random((Y.shape[0], 4)) # for now
+        rgb = np.array([
+            [1, 0, 0, 0.5],
+            [0, 1, 0, 0.5],
+            [0, 0, 1, 0.5]
+        ])
+        self.colors = rgb[np.random.choice(3, (Y.shape[0], 1))] # for now
+        self.init_buffers()
 
-    def init_shaders(self, parent, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
-        self.program = QOpenGLShaderProgram(parent)
-        self.parent = parent
-
-        # Read shader code from source
-        with open(vertex_shader, 'r') as vs, open(fragment_shader) as fs:
-            self.program.addShaderFromSourceCode(QOpenGLShader.Vertex, vs.read())
-            self.program.addShaderFromSourceCode(QOpenGLShader.Fragment, fs.read())
-        
-        self.program.link()
-
-    def init_buffers(self, gl):
+    def init_buffers(self):
         # Make (temporary) 32-bit duplicates
         Y_32 = np.array(self.Y, dtype=np.float32)
         colors_32 = np.array(self.colors, dtype=np.float32)
 
-        # Make a VAO that contains all arrays for our triangle.
+        # Make a VAO. It will remember the enabled attributes
         self.vao = QOpenGLVertexArrayObject()
         self.vao.create()
-        self.vao.bind()
 
         # Make the VBO that contains the vertex coordinates
         # Also, fill it with the position data.
@@ -37,8 +31,7 @@ class Dataset2D:
         self.position_vbo.create()
         self.position_vbo.bind()
         self.position_vbo.setUsagePattern(QOpenGLBuffer.DynamicDraw)
-        self.position_vbo.allocate(Y_32.data.nbytes)
-        self.position_vbo.write(0, Y_32, Y_32.data.nbytes)
+        self.position_vbo.allocate(Y_32.data, Y_32.data.nbytes)
         self.position_vbo.release()
 
         # Make the VBO that contains the vertex colours
@@ -50,15 +43,19 @@ class Dataset2D:
         self.color_vbo.allocate(colors_32.data, colors_32.data.nbytes)
         self.color_vbo.release()
 
+    def bind_to_shader(self, shader_program, gl):
+        # Bind the VAO. It will remember the enabled attributes
+        self.vao.bind()
+        
         # Get the 'internal addresses' of the required attributes in the shader
-        self.program.bind()
-        self.position_attr = self.program.attributeLocation('position')
-        self.color_attr = self.program.attributeLocation('color')
+        shader_program.bind()
+        self.position_attr = shader_program.attributeLocation('position')
+        self.color_attr = shader_program.attributeLocation('color')
         
         # Explain the format of the 'position' attribute buffer to the shader.
-        self.program.enableAttributeArray(self.position_attr)
+        shader_program.enableAttributeArray(self.position_attr)
         self.position_vbo.bind()
-        self.program.setAttributeBuffer(
+        shader_program.setAttributeBuffer(
             self.position_attr,    # Attribute location
             gl.GL_FLOAT,       # Data type of elements
             0,                      # Offset
@@ -68,9 +65,9 @@ class Dataset2D:
         self.position_vbo.release()
 
         # Explain the format of the 'colour' attribute buffer to the shader.
-        self.program.enableAttributeArray(self.color_attr)
+        shader_program.enableAttributeArray(self.color_attr)
         self.color_vbo.bind()
-        self.program.setAttributeBuffer(
+        shader_program.setAttributeBuffer(
             self.color_attr,  # Attribute location
             gl.GL_FLOAT,   # Data type of elements
             0,                  # Offset
@@ -78,21 +75,12 @@ class Dataset2D:
             0                   # Stride
         )
         self.color_vbo.release()
-
-        # NOTE: The VAO remembers:
-        #   * which buffers are enabled/disabled
-        #   * which attribute arrays are enabled/disabled for which buffers
-
-        self.program.release()
-        self.vao.release()
-
-        self.program.bind()
-        gl.glUniform1f(self.program.uniformLocation('point_size'), 8)
-        self.program.release()
-
-        self.projection = QMatrix4x4()
-        # projection_location = self.program.uniformLocation('projection');
-        # self.program.setUniformValue(projection_location, projection)
+        shader_program.release()
+        
+        shader_program.bind()
+        # shader_program.setUniformValue('point_size', 8)
+        # gl.glUniform1f(shader_program.uniformLocation('point_size'), 8)
+        shader_program.release()
 
     def update_Y(self, Y):
         self.Y = Y
@@ -112,8 +100,5 @@ class Dataset2D:
 
     def draw(self, gl):
         self.vao.bind()
-        self.program.bind()
-        self.program.setUniformValue('camera', self.parent.camera)
         gl.glDrawArrays(gl.GL_POINTS, 0, self.Y.shape[0])
-        self.program.release()
         self.vao.release()
