@@ -77,11 +77,6 @@ class Dataset2D:
         self.color_vbo.release()
         shader_program.release()
         
-        shader_program.bind()
-        # shader_program.setUniformValue('point_size', 8)
-        # gl.glUniform1f(shader_program.uniformLocation('point_size'), 8)
-        shader_program.release()
-
     def update_Y(self, Y):
         self.Y = Y
         Y_32 = np.array(self.Y, dtype=np.float32)

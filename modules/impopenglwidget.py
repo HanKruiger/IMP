@@ -7,9 +7,10 @@ class ImpOpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(ImpOpenGLWidget, self).__init__(parent)
         self.objects = []
+
         self.model = QMatrix4x4()
-        self.model.scale(2, 2);
-        self.model.translate(-0.5, -0.5);
+        self.model.scale(2, 2)
+        self.model.translate(-0.5, -0.5)
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
 
@@ -27,19 +28,13 @@ class ImpOpenGLWidget(QOpenGLWidget):
         
         self.shader_program.link()
 
-    def mousePressEvent(self, event):
-        print('{}, {}'.format(event.x() / self.width(), event.y() / self.height()))
-
-    def wheelEvent(self, wheel_event):
-        factor = 1.1
-        if wheel_event.angleDelta().y() < 0:
-            factor = 1 / factor
-
+    def zoom(self, factor, pos):
+        p_pixel = QVector3D(pos)
+        
         # Manually transform from pixel coordinates to clip coordinates.
-        p = QVector3D(wheel_event.pos())
-        p *= QVector3D(2 / self.width(), 2 / self.height(), 1)
-        p -= QVector3D(1, 1, 0)
-        p_clip = p * QVector3D(1, -1, 1)
+        p_pixel *= QVector3D(2 / self.width(), 2 / self.height(), 1)
+        p_pixel -= QVector3D(1, 1, 0)
+        p_clip = p_pixel * QVector3D(1, -1, 1)
 
         view_i, invertible = self.view.inverted()
         if not invertible:
@@ -54,11 +49,29 @@ class ImpOpenGLWidget(QOpenGLWidget):
         # Transform p from clip coordinates, through view coordinates, to world coordinates.
         p_world = view_i.map(projection_i.map(p_clip))
 
-        # Change the view matrix s.t. it is zoomed in, but maps p to the same point.
+        # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
         self.view.translate((1 - factor) * p_world)
         self.view.scale(factor)
 
         self.update()
+
+    def set_pointsize(self, point_size):
+        self.point_size = float(point_size)
+        self.update()
+
+    def mousePressEvent(self, mouse_press_event):
+        p = QVector2D(mouse_press_event.pos())
+        p *= QVector2D(1 / self.width(), 1 / self.height())
+        print(p)
+
+    def wheelEvent(self, wheel_event):
+        if wheel_event.pixelDelta().y() == 0:
+            wheel_event.ignore()
+            return
+        wheel_event.accept()
+        factor = 1.01 ** wheel_event.pixelDelta().y()
+        self.zoom(factor, wheel_event.pos())
+        
 
     def minimumSizeHint(self):
         return QSize(50, 50)
@@ -71,25 +84,28 @@ class ImpOpenGLWidget(QOpenGLWidget):
         gl = self.gl # Shorthand
         gl.initializeOpenGLFunctions()
 
+        self.init_shaders()
+
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
         gl.glEnable(gl.GL_PROGRAM_POINT_SIZE);
         gl.glEnable(gl.GL_MULTISAMPLE);
         gl.glEnable(gl.GL_BLEND);
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
 
-        self.init_shaders()
-
     def paintGL(self):
         gl = self.gl # Shorthand
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         self.shader_program.bind()
+
         self.shader_program.setUniformValue('model', self.model)
         self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('projection', self.projection)
-        self.shader_program.setUniformValue('point_size', 8.0)
+        self.shader_program.setUniformValue('point_size', self.point_size)
+        
         for o in self.objects:
             o.draw(gl)
+
         self.shader_program.release()
 
     def resizeGL(self, w, h):
