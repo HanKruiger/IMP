@@ -6,18 +6,20 @@ import numpy as np
 
 from modules.impopenglwidget import ImpOpenGLWidget
 from modules.dataset2d import Dataset2D
+from modules.datasetmd import DatasetMD
 
 class ImpApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
         self.show()
-        self.init_ui()        
+        self.init_ui()
+        self.datasets = []        
 
     def init_ui(self):
         self.gl_widget = ImpOpenGLWidget(self)
         self.setCentralWidget(self.gl_widget)
-
+        self.setAcceptDrops(True);
         toolbar = self.addToolBar('Toolbar')
 
         test_button = QAction('Test', self)
@@ -43,6 +45,7 @@ class ImpApp(QMainWindow):
 
         self.center()
         self.setWindowTitle('IMP: Interactive Multidimensional Projections')
+        self.statusBar().showMessage('Built user interface.', msecs=2000)
 
     def do_something(self):
         Y = np.random.random((10000, 2))
@@ -52,6 +55,29 @@ class ImpApp(QMainWindow):
 
         # Schedule redraw
         self.gl_widget.update()
+
+    def dragLeaveEvent(self, drag_event):
+        self.statusBar().clearMessage()
+
+    def dragEnterEvent(self, drag_event):
+        if drag_event.mimeData().hasUrls():
+            urls = drag_event.mimeData().urls()
+            if not all([url.isValid() for url in urls]):
+                qDebug('Invalid URL(s): {0}'.format([url.toString() for url in urls if not url.isValid()]))
+            elif not all([url.isLocalFile() for url in urls]):
+                qDebug('Non-local URL(s): {0}'.format([url.toString() for url in urls if not url.isLocalFile()]))
+            else:
+                self.statusBar().showMessage('Drop to load {0}'.format(', '.join([url.fileName() for url in urls])))
+                drag_event.acceptProposedAction()
+
+    def dropEvent(self, drop_event):
+        urls = drop_event.mimeData().urls()
+        for url in urls:
+            self.statusBar().showMessage('Loading {0}'.format(url.fileName()))
+            self.datasets.append(DatasetMD(url.path()))
+
+        for dataset in self.datasets:
+            print('{}, shape: {}'.format(dataset.name, dataset.data.shape))
 
     def center(self):
         rect = self.frameGeometry()
