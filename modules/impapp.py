@@ -13,8 +13,9 @@ class ImpApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.show()
-        self.init_ui()
+        self.selected_dataset = None
         self.datasets = []        
+        self.init_ui()
 
     def init_ui(self):
         self.gl_widget = ImpOpenGLWidget(self)
@@ -22,35 +23,48 @@ class ImpApp(QMainWindow):
         self.setAcceptDrops(True);
         toolbar = self.addToolBar('Toolbar')
 
-        test_button = QAction('Test', self)
-        test_button.triggered.connect(self.do_something)
-        toolbar.addAction(test_button)
-        
         quit_action = QAction('&Quit', self)
         quit_action.setShortcut('q')
         quit_action.setStatusTip('Quit application')
         quit_action.triggered.connect(qApp.quit)
         toolbar.addAction(quit_action)
 
-        sidebar = QToolBar('Sidebar')
-        self.addToolBar(Qt.LeftToolBarArea, sidebar)
+        self.datasets_widget = DatasetsWidget(self.datasets)
+        dataset_bar = QToolBar('Datasets')
+        self.addToolBar(Qt.LeftToolBarArea, dataset_bar)
+        dataset_bar.addWidget(self.datasets_widget)
+        
+        visual_options_bar = QToolBar('Visual options')
+        self.addToolBar(Qt.RightToolBarArea, visual_options_bar)
 
         pointsize_slider = QSlider(Qt.Horizontal)
         pointsize_slider.setMinimum(1.0)
         pointsize_slider.setMaximum(10.0)
         pointsize_slider.valueChanged.connect(self.gl_widget.set_pointsize)
         pointsize_slider.setValue(8.0)
-        sidebar.addWidget(QLabel('Point size'))
-        sidebar.addWidget(pointsize_slider)
+        visual_options_bar.addWidget(QLabel('Point size'))
+        visual_options_bar.addWidget(pointsize_slider)
 
         self.center()
         self.setWindowTitle('IMP: Interactive Multidimensional Projections')
         self.statusBar().showMessage('Built user interface.', msecs=2000)
 
-    def do_something(self):
-        Y = np.random.random((10000, 2))
+    def select_dataset(self, dataset):
+        self.selected_dataset = dataset
+        dataset.embedding_finished.connect(self.bind_embedding)
+        self.statusBar().showMessage('Making embedding...')
+        dataset.make_embedding()
+
+    def deselect_dataset(self, embedding=None):
+        if embedding is not None:
+            self.gl_widget.remove_object(embedding)
+        self.selected_dataset = None
+
+    def bind_embedding(self, embedding):
+        self.statusBar().showMessage('Binding embedding...')
+
         self.gl_widget.makeCurrent()
-        self.gl_widget.add_object(Dataset2D(Y))
+        self.gl_widget.add_object(embedding)
         self.gl_widget.doneCurrent()
 
         # Schedule redraw
@@ -77,8 +91,9 @@ class ImpApp(QMainWindow):
             dmd = DatasetMD(url.path())
             def callback():
                 self.statusBar().showMessage('Done loading {0}.'.format(url.fileName()))
+                self.datasets_widget.refresh()
             dmd.data_loaded.connect(callback)
-            dmd.load()
+            dmd.load_data()
             self.datasets.append(dmd)
 
     def center(self):
@@ -87,3 +102,33 @@ class ImpApp(QMainWindow):
         center_point = QDesktopWidget().availableGeometry().center()
         rect.moveCenter(center_point)
         self.move(rect.topLeft())
+
+# Maintains a list of loaded datasets
+class DatasetsWidget(QGroupBox):
+    def __init__(self, datasets, parent=None):
+        super().__init__('Datasets', parent)
+        self.datasets = datasets
+        self.init_ui()
+
+    def init_ui(self):
+        if self.layout() is not None:
+            # An anonymous QWidget adopts the layout, so we can replace it.
+            # (It will be deleted by the GC, since it will have no references
+            # to it when this function ends.)
+            QWidget().setLayout(self.layout())
+
+        grid = QGridLayout()
+        for i, dataset in enumerate(self.datasets):
+            grid.addWidget(QLabel(dataset.name), i, 0)
+            grid.addWidget(QLabel(str(dataset.N)), i, 1)
+            grid.addWidget(QLabel(str(dataset.m)), i, 2)
+            layout_button = QPushButton(text='Select')
+            def select_dataset():
+                self.parent().parent().select_dataset(dataset)
+            layout_button.clicked.connect(select_dataset)
+            # layout_button.clicked.connect(hoi)
+            grid.addWidget(layout_button)
+        self.setLayout(grid)
+
+    def refresh(self):
+        self.init_ui()

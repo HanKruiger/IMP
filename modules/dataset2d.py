@@ -14,7 +14,7 @@ class Dataset2D:
             [0, 0, 1, 0.5]
         ])
         self.colors = rgb[np.random.choice(3, (Y.shape[0], 1))] # for now
-        self.init_buffers()
+        # self.init_buffers()
 
     def init_buffers(self):
         # Make (temporary) 32-bit duplicates
