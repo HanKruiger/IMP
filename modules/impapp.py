@@ -73,11 +73,13 @@ class ImpApp(QMainWindow):
     def dropEvent(self, drop_event):
         urls = drop_event.mimeData().urls()
         for url in urls:
-            self.statusBar().showMessage('Loading {0}'.format(url.fileName()))
-            self.datasets.append(DatasetMD(url.path()))
-
-        for dataset in self.datasets:
-            print('{}, shape: {}'.format(dataset.name, dataset.data.shape))
+            self.statusBar().showMessage('Loading {0}...'.format(url.fileName()))
+            dmd = DatasetMD(url.path())
+            def callback():
+                self.statusBar().showMessage('Done loading {0}.'.format(url.fileName()))
+            dmd.data_loaded.connect(callback)
+            dmd.load()
+            self.datasets.append(dmd)
 
     def center(self):
         rect = self.frameGeometry()
