@@ -27,8 +27,6 @@ def normalize(Y):
     return Y_cpy
 
 class PCAEmbedder(QThread):
-    embedding_finished = pyqtSignal(np.ndarray)
-
     def __init__(self, X, n_components=2):
         super().__init__()
         self.X = X
@@ -36,7 +34,5 @@ class PCAEmbedder(QThread):
 
     def run(self):
         pca = PCA(n_components=self.n_components)
-        Y = pca.fit_transform(self.X)
-        Y = normalize(Y)
-        self.embedding_finished.emit(Y)
-
+        self.Y = pca.fit_transform(self.X)
+        self.Y = normalize(self.Y)

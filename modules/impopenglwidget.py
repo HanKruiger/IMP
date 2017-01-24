@@ -6,7 +6,7 @@ class ImpOpenGLWidget(QOpenGLWidget):
 
     def __init__(self, parent=None):
         super(ImpOpenGLWidget, self).__init__(parent)
-        self.objects = []
+        self.objects = set()
 
         self.model = QMatrix4x4()
         self.model.scale(2, 2)
@@ -15,15 +15,15 @@ class ImpOpenGLWidget(QOpenGLWidget):
         self.projection = QMatrix4x4()
 
     def add_object(self, o):
-        self.objects.append(o)
+        self.objects.add(o)
         self.makeCurrent()
         o.init_buffers()
         o.bind_to_shader(self.shader_program, self.gl)
         self.doneCurrent()
 
-    #TODO: Implement
     def remove_object(self, o):
-        pass
+        self.objects.remove(o)
+        # TODO: Clean up buffers
 
     def init_shaders(self, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
         self.shader_program = QOpenGLShaderProgram(self)
@@ -69,7 +69,6 @@ class ImpOpenGLWidget(QOpenGLWidget):
     def mousePressEvent(self, mouse_press_event):
         p = QVector2D(mouse_press_event.pos())
         p *= QVector2D(1 / self.width(), 1 / self.height())
-        print(p)
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
@@ -78,7 +77,6 @@ class ImpOpenGLWidget(QOpenGLWidget):
         wheel_event.accept()
         factor = 1.01 ** wheel_event.pixelDelta().y()
         self.zoom(factor, wheel_event.pos())
-        
 
     def minimumSizeHint(self):
         return QSize(50, 50)

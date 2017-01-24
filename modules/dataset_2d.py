@@ -3,22 +3,22 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
+from modules.dataset import Dataset
 
-class Dataset2D:
+class Dataset2D(Dataset):
 
-    def __init__(self, Y):
-        self.Y = Y
+    def __init__(self, name, parent, X):
+        super().__init__(name, parent, X)
         rgb = np.array([
             [1, 0, 0, 0.5],
             [0, 1, 0, 0.5],
             [0, 0, 1, 0.5]
         ])
-        self.colors = rgb[np.random.choice(3, (Y.shape[0], 1))] # for now
-        # self.init_buffers()
+        self.colors = rgb[np.random.choice(3, (self.N, 1))] # for now
 
     def init_buffers(self):
         # Make (temporary) 32-bit duplicates
-        Y_32 = np.array(self.Y, dtype=np.float32)
+        X_32 = np.array(self.X, dtype=np.float32)
         colors_32 = np.array(self.colors, dtype=np.float32)
 
         # Make a VAO. It will remember the enabled attributes
@@ -31,7 +31,7 @@ class Dataset2D:
         self.position_vbo.create()
         self.position_vbo.bind()
         self.position_vbo.setUsagePattern(QOpenGLBuffer.DynamicDraw)
-        self.position_vbo.allocate(Y_32.data, Y_32.data.nbytes)
+        self.position_vbo.allocate(X_32.data, X_32.data.nbytes)
         self.position_vbo.release()
 
         # Make the VBO that contains the vertex colours
@@ -77,23 +77,23 @@ class Dataset2D:
         self.color_vbo.release()
         shader_program.release()
         
-    def update_Y(self, Y):
-        self.Y = Y
-        Y_32 = np.array(self.Y, dtype=np.float32)
+    def update_Y(self, X):
+        self.X = X
+        X_32 = np.array(self.X, dtype=np.float32)
 
         # Update the buffer
         self.position_vbo.bind()
-        if self.position_vbo.size() != Y_32.data.nbytes:
+        if self.position_vbo.size() != X_32.data.nbytes:
             print('Reallocating.')
-            self.position_vbo.allocate(Y_32.data, Y_32.data.nbytes)
+            self.position_vbo.allocate(X_32.data, X_32.data.nbytes)
         else:
             # No need to reallocate. Just overwrite
             print('Overwriting.')
-            self.position_vbo.write(0, Y_32, Y_32.data.nbytes)
+            self.position_vbo.write(0, X_32, X_32.data.nbytes)
         self.position_vbo.release()
             
 
     def draw(self, gl):
         self.vao.bind()
-        gl.glDrawArrays(gl.GL_POINTS, 0, self.Y.shape[0])
+        gl.glDrawArrays(gl.GL_POINTS, 0, self.N)
         self.vao.release()
