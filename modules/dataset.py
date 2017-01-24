@@ -14,6 +14,7 @@ class Dataset(QObject):
         super().__init__()
         self.name = name
         self.parent = parent
+        self.children = set()
         if X is not None:
             self.set_data(X)
 
@@ -39,8 +40,9 @@ class Dataset(QObject):
         # Prevent cyclic imports..
         from modules.dataset_2d import Dataset2D
 
-        self.child = Dataset2D(self.name + '_em', self, X=Y) # for now
-        self.embedding_finished.emit(self.child)
+        new_child = Dataset2D(self.name + '_em', self, X=Y)
+        self.children.add(new_child) # for now
+        self.embedding_finished.emit(new_child)
 
 class InputDataset(Dataset):
     # Emitted when input data is loaded
