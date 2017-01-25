@@ -16,14 +16,26 @@ class ImpOpenGLWidget(QOpenGLWidget):
 
     def add_object(self, o):
         self.objects.add(o)
+
         self.makeCurrent()
+
         o.init_buffers()
         o.bind_to_shader(self.shader_program, self.gl)
+        
         self.doneCurrent()
+        
+        self.update()
 
     def remove_object(self, o):
         self.objects.remove(o)
-        # TODO: Clean up buffers
+
+        self.makeCurrent()
+
+        o.destroy_buffers()
+
+        self.doneCurrent()
+        
+        self.update()
 
     def init_shaders(self, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
         self.shader_program = QOpenGLShaderProgram(self)

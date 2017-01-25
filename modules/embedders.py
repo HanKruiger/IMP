@@ -27,10 +27,12 @@ def normalize(Y):
     return Y_cpy
 
 class PCAEmbedder(QThread):
-    def __init__(self, X, n_components=2):
+    def __init__(self, n_components=2):
         super().__init__()
-        self.X = X
         self.n_components = n_components
+
+    def set_input(self, X):
+        self.X = X
 
     def run(self):
         pca = PCA(n_components=self.n_components)

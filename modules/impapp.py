@@ -63,59 +63,82 @@ class DatasetsWidget(QGroupBox):
         self.imp_app = imp_app
         self.vbox_main = QVBoxLayout()
         self.setLayout(self.vbox_main)
-        self.setAcceptDrops(True)
+        self.id_max = 0
+
+        self.id_items = dict()
         self.datasets = dict()
+        self.tree_view = QTreeView()
+        self.model = QStandardItemModel()
+        self.tree_view.setModel(self.model)
+        self.model.setHorizontalHeaderLabels(['ID', 'Name', 'N', 'm'])
+        self.vbox_main.addWidget(self.tree_view)
+        self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree_view.customContextMenuRequested.connect(self.open_menu)
+        
+        self.setAcceptDrops(True)
+
 
     @pyqtSlot(object)
     def add_dataset(self, dataset):
-        new_widget = QWidget()
-        self.datasets[dataset] = new_widget
-        hbox = QHBoxLayout()
-        self.datasets[dataset].setLayout(hbox)
+        print(dataset.name)
+        name_item = QStandardItem(dataset.name)
+        N_item = QStandardItem(str(dataset.N))
+        m_item = QStandardItem(str(dataset.m))
+        
+        the_id = str(self.id_max)
+        id_item = QStandardItem(the_id)
+        self.id_max += 1
 
-        # Very ugly hack for indentation
-        parent = dataset.parent
-        while parent is not None:
-            spacing = QWidget()
-            spacing.setMinimumWidth(10)
-            hbox.addWidget(spacing)
-            parent = parent.parent
-
-        # Add some labels
-        hbox.addWidget(QLabel(dataset.name))
-        hbox.addWidget(QLabel(str(dataset.N)))
-        hbox.addWidget(QLabel(str(dataset.m)))
-
-        # Add a button, based on the dimensionality of the dataset.
-        if dataset.m > 2:
-            embed_button = QPushButton(text='Embed')
-            def embed_dataset():
-                dataset.make_embedding(PCAEmbedder)
-            embed_button.clicked.connect(embed_dataset)
-            dataset.embedding_finished.connect(self.add_dataset)
-            hbox.addWidget(embed_button)
-        elif dataset.m == 2:
-            visibility_button = QPushButton(text='View')
-            def toggle_visibility():
-                if dataset in self.imp_app.gl_widget.objects:
-                    self.imp_app.gl_widget.remove_object(dataset)
-                    visibility_button.setText('View')
-                else:
-                    self.imp_app.gl_widget.add_object(dataset)
-                    visibility_button.setText('Unview')
-                self.imp_app.gl_widget.update()
-            visibility_button.clicked.connect(toggle_visibility)
-            hbox.addWidget(visibility_button)
-
-        # Add it to the main layout
-        if dataset.parent is not None:
-            # After the parent
-            parent_idx = self.vbox_main.indexOf(self.datasets[dataset.parent])
-            self.vbox_main.insertWidget(parent_idx + len(dataset.parent.children), new_widget)
+        self.id_items[dataset] = id_item
+        self.datasets[the_id] = dataset
+        if dataset.parent() is None:
+            self.model.appendRow([id_item, name_item, N_item, m_item])
         else:
-            # At the bottom
-            self.vbox_main.addWidget(new_widget)    
-    
+            self.id_items[dataset.parent()].appendRow([id_item, name_item, N_item, m_item])
+        for i in range(4):
+            self.tree_view.resizeColumnToContents(i)
+
+    def open_menu(self, position):
+        indexes = self.tree_view.selectedIndexes()
+        if len(indexes) != 4:
+            return
+
+        # Get the id of the selected row
+        the_id = self.model.data(indexes[0])
+
+        # Get the Dataset object by using the id
+        dataset = self.datasets[the_id]
+
+        # Build menu, based on characteristics of Dataset object.
+        menu = QMenu()
+
+        if type(dataset) == Dataset2D:
+            if dataset in self.imp_app.gl_widget.objects:
+                unview_action = menu.addAction('Unview')
+                @pyqtSlot()
+                def unview_embedding():
+                    self.imp_app.gl_widget.remove_object(dataset)
+                unview_action.triggered.connect(unview_embedding)
+            else:
+                view_action = menu.addAction('View')
+
+                @pyqtSlot()
+                def view_embedding():
+                    self.imp_app.gl_widget.add_object(dataset)
+
+                view_action.triggered.connect(view_embedding)
+        if type(dataset) == Dataset or type(dataset) == InputDataset:
+            embed_action = menu.addAction('PCA to 2D')
+
+            @pyqtSlot()
+            def make_embedding():
+                dataset.embedding_finished.connect(self.add_dataset)
+                dataset.make_embedding(PCAEmbedder(n_components=2))
+
+            embed_action.triggered.connect(make_embedding)
+        
+        menu.exec_(self.tree_view.viewport().mapToGlobal(position))
+
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             urls = e.mimeData().urls()
@@ -159,45 +182,3 @@ class VisualAttributesWidget(QGroupBox):
         self.imp_app = imp_app
         self.vbox_main = QVBoxLayout()
         self.setLayout(self.vbox_main)
-        self.setAcceptDrops(True)
-
-    def add_visual_attribute(self, dataset):
-        hbox = QHBoxLayout()
-
-        # Add some labels
-        hbox.addWidget(QLabel(dataset.name))
-        hbox.addWidget(QLabel(str(dataset.N)))
-        hbox.addWidget(QLabel(str(dataset.m)))
-
-        # TODO: Selector for which visual channel to use.
-
-        # Add it to the main layout
-        self.vbox_main.addLayout(hbox)  
-
-    def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls():
-            urls = e.mimeData().urls()
-            if not all([url.isValid() for url in urls]):
-                qDebug('Invalid URL(s): {0}'.format([url.toString() for url in urls if not url.isValid()]))
-            elif not all([url.isLocalFile() for url in urls]):
-                qDebug('Non-local URL(s): {0}'.format([url.toString() for url in urls if not url.isLocalFile()]))
-            else:
-                self.imp_app.statusBar().showMessage('Drop to load {0} as new visual attribute.'.format(', '.join([url.fileName() for url in urls])))
-                e.acceptProposedAction()
-
-    def dragLeaveEvent(self, e):
-        self.imp_app.statusBar().clearMessage()
-
-    def dropEvent(self, e):
-        urls = e.mimeData().urls()
-        for url in urls:
-            input_dataset = InputDataset(url.path())
-
-            @pyqtSlot()
-            def callback():
-                self.imp_app.statusBar().clearMessage()
-                self.add_visual_attribute(input_dataset)
-
-            input_dataset.data_ready.connect(callback)
-            self.imp_app.statusBar().showMessage('Loading {0}...'.format(url.fileName()))
-            input_dataset.load_data()

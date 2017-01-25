@@ -10,13 +10,37 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     embedding_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent=None, X=None):
+    def __init__(self, name, parent=None, X=None, item_data=None):
         super().__init__()
         self.name = name
-        self.parent = parent
-        self.children = set()
+        self._parent = parent
+        self._children = []
+        self._item_data = item_data
         if X is not None:
             self.set_data(X)
+
+    def parent(self):
+        return self._parent
+
+    def child(self, row):
+        return self._children[i]
+
+    def child_count(self, row):
+        return len(self._children)
+
+    def append_child(self, child):
+        self._children.append(child)
+
+    def row(self):
+        if self.parent() is not None:
+            return self.parent()._children.index(self)
+        return 0
+
+    def column_count(self):
+        return len(self._item_data)
+
+    def data(self, column):
+        return self._item_data[column]
 
     def set_data(self, X):
         self.X = X
@@ -26,10 +50,11 @@ class Dataset(QObject):
         else:
             self.m = X.shape[1]
 
-    def make_embedding(self, Embedder):
-        self.embedding_worker = Embedder(self.X)
-        self.embedding_worker.finished.connect(self.set_embedding)
-        self.embedding_worker.start()
+    def make_embedding(self, embedder):
+        self.embedding_worker = embedder
+        embedder.set_input(self.X)
+        embedder.finished.connect(self.set_embedding)
+        embedder.start()
 
     @pyqtSlot()
     def set_embedding(self):
@@ -40,8 +65,8 @@ class Dataset(QObject):
         # Prevent cyclic imports..
         from modules.dataset_2d import Dataset2D
 
-        new_child = Dataset2D(self.name + '_em', self, X=Y)
-        self.children.add(new_child) # for now
+        new_child = Dataset2D(self.name + '_em', self, X=Y) # for now
+        self.append_child(new_child)
         self.embedding_finished.emit(new_child)
 
 class InputDataset(Dataset):
@@ -50,7 +75,7 @@ class InputDataset(Dataset):
 
     def __init__(self, path):
         name = os.path.splitext(os.path.basename(path))[0]
-        super().__init__(name, parent=None, X=None)
+        super().__init__(name)
 
         # Load the data in a separate thread, so the GUI doesn't hang.
         # (Doesn't start reading yet. Still needs to be connected from

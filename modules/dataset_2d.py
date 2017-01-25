@@ -43,6 +43,11 @@ class Dataset2D(Dataset):
         self.color_vbo.allocate(colors_32.data, colors_32.data.nbytes)
         self.color_vbo.release()
 
+    def destroy_buffers(self):
+        self.vao.destroy()
+        self.position_vbo.destroy()
+        self.color_vbo.destroy()
+
     def bind_to_shader(self, shader_program, gl):
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
