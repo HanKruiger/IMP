@@ -14,6 +14,10 @@ class ImpOpenGLWidget(QOpenGLWidget):
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
 
+    def clear(self):
+        for o in self.objects.copy():
+            self.remove_object(o)
+
     def add_object(self, o):
         self.objects.add(o)
 

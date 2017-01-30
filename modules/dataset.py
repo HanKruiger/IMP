@@ -16,20 +16,35 @@ class Dataset(QObject):
         self._parent = parent
         self._children = []
         self._item_data = item_data
+        self._qItem = None
         if X is not None:
             self.set_data(X)
+
+    def destroy(self):
+        del self.X
+        if self._parent is not None:
+            self._parent.remove_child(self)
 
     def parent(self):
         return self._parent
 
+    def qItem(self):
+        return self._qItem
+
+    def set_qItem(self, qItem):
+        self._qItem = qItem
+
     def child(self, row):
         return self._children[i]
 
-    def child_count(self, row):
+    def child_count(self):
         return len(self._children)
 
     def append_child(self, child):
         self._children.append(child)
+
+    def remove_child(self, child):
+        self._children.remove(child)
 
     def row(self):
         if self.parent() is not None:
@@ -112,3 +127,25 @@ class DataLoadWorker(QThread):
     def run(self):
         # Make numpy load the data
         self.data = np.loadtxt(self.path)
+
+class DatasetItem(QStandardItem):
+
+    def __init__(self, text):
+        super().__init__(text)
+
+    def type(self):
+        return QStandardItem.UserType
+
+    def setData(self, data, role):
+        if role == Qt.UserRole:
+            self.data = data
+            data.set_qItem(self)
+            self.emitDataChanged()
+        else:
+            super().setData(data, role)
+
+    def data(self, role):
+        if role == Qt.UserRole:
+            return self.data
+        else:
+            return super().data(role)

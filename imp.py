@@ -6,7 +6,7 @@ from PyQt5.QtCore import *
 
 import sys
 
-from modules.impapp import ImpApp
+from modules.imp_app import ImpApp
 
 if __name__ == '__main__':
     qsf = QSurfaceFormat()
