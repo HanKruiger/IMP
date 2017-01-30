@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.embedders import PCAEmbedder, TSNEEmbedder
+from modules.embedders import *
 
 class ProjectionDialog(QDialog):
 
@@ -14,6 +14,10 @@ class ProjectionDialog(QDialog):
         self.projection_technique = QComboBox()
         self.projection_technique.addItem('PCA', PCAEmbedder)
         self.projection_technique.addItem('t-SNE', TSNEEmbedder)
+        self.projection_technique.addItem('LLE', LLEEmbedder)
+        self.projection_technique.addItem('Spectral', SpectralEmbedder)
+        self.projection_technique.addItem('MDS', MDSEmbedder)
+        self.projection_technique.addItem('Isomap', IsomapEmbedder)
 
         self.projection_technique.currentIndexChanged.connect(self.build_parameters_ui)
 
@@ -38,7 +42,9 @@ class ProjectionDialog(QDialog):
             if input_box.hasAcceptableInput():
                 parameters[name] = data_type(input_box.text())
 
-        embedder = embedder_class(**parameters)
+        embedder = embedder_class()
+        embedder.set_parameters(parameters)
+
         self.imp_app.statusBar().showMessage('Making layout with {}...'.format(embedder_class.__name__))
         self.dataset.make_embedding(embedder)
         self.done(0)
@@ -60,7 +66,7 @@ class ProjectionDialog(QDialog):
 
         self.clear_layout(self.parameters_layout)
 
-        for name, data_type, default in embedder_class.parameters():
+        for name, data_type, default in embedder_class.parameters_description():
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel(name))
             input_box = QLineEdit()

@@ -6,16 +6,18 @@ import abc
 import os
 import numpy as np
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE, LocallyLinearEmbedding, Isomap, MDS, SpectralEmbedding
 
 class Embedder(QThread):
 
-    def __init__(self, n_components=2):
+    def __init__(self):
         super().__init__()
-        self.n_components = n_components
 
     def set_input(self, X):
         self.X = X
+
+    def set_parameters(self, parameters):
+        self.parameters = parameters
 
     @abc.abstractmethod
     def run(self):
@@ -38,37 +40,110 @@ class Embedder(QThread):
         return Y_cpy
 
     @classmethod
-    def parameters(cls):
+    def parameters_description(cls):
         return [
             ('n_components', int, 2)
         ]
 
 class PCAEmbedder(Embedder):
 
-    def __init__(self, n_components=2):
-        super().__init__(n_components)
+    def __init__(self):
+        super().__init__()
 
     def run(self):
-        pca = PCA(n_components=self.n_components)
+        pca = PCA(**self.parameters)
         self.Y = pca.fit_transform(self.X)
         self.Y = self.normalize(self.Y)
 
 class TSNEEmbedder(Embedder):
 
-    def __init__(self, n_components=2, perplexity=30, n_iter=1000):
-        super().__init__(n_components)
-        self.perplexity = perplexity
+    def __init__(self):
+        super().__init__()
 
     def run(self):
-        tsne = TSNE(n_components=self.n_components, perplexity=self.perplexity)
+        tsne = TSNE(**self.parameters)
         self.Y = tsne.fit_transform(self.X)
         self.Y = self.normalize(self.Y)
 
     @classmethod
-    def parameters(cls):
-        params = super().parameters()
+    def parameters_description(cls):
+        params = super().parameters_description()
         params.extend([
             ('perplexity', float, 30.0),
-            ('n_iter', int, 10)
+            ('n_iter', int, 200)
+        ])
+        return params
+
+
+class LLEEmbedder(Embedder):
+
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        lle = LocallyLinearEmbedding(**self.parameters)
+        self.Y = lle.fit_transform(self.X)
+        self.Y = self.normalize(self.Y)
+
+    @classmethod
+    def parameters_description(cls):
+        params = super().parameters_description()
+        params.extend([
+            ('n_neighbors', int, 5),
+        ])
+        return params
+
+class SpectralEmbedder(Embedder):
+
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        lle = SpectralEmbedding(**self.parameters)
+        self.Y = lle.fit_transform(self.X)
+        self.Y = self.normalize(self.Y)
+
+    @classmethod
+    def parameters_description(cls):
+        params = super().parameters_description()
+        params.extend([
+            ('n_neighbors', int, 5)
+        ])
+        return params
+
+class MDSEmbedder(Embedder):
+
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        lle = MDS(**self.parameters)
+        self.Y = lle.fit_transform(self.X)
+        self.Y = self.normalize(self.Y)
+
+    @classmethod
+    def parameters_description(cls):
+        params = super().parameters_description()
+        params.extend([
+            ('max_iter', int, 300),
+            ('metric', int, 1)
+        ])
+        return params
+
+class IsomapEmbedder(Embedder):
+
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        lle = Isomap(**self.parameters)
+        self.Y = lle.fit_transform(self.X)
+        self.Y = self.normalize(self.Y)
+
+    @classmethod
+    def parameters_description(cls):
+        params = super().parameters_description()
+        params.extend([
+            ('n_neighbors', int, 5)
         ])
         return params
