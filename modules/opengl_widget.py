@@ -2,15 +2,13 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-class ImpOpenGLWidget(QOpenGLWidget):
+class OpenGLWidget(QOpenGLWidget):
 
     def __init__(self, parent=None):
-        super(ImpOpenGLWidget, self).__init__(parent)
+        super().__init__(parent)
         self.objects = set()
 
         self.model = QMatrix4x4()
-        self.model.scale(2, 2)
-        self.model.translate(-0.5, -0.5)
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
 

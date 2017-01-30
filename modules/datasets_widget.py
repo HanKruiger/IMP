@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
 from modules.embedders import PCAEmbedder
+from modules.projection_dialog import ProjectionDialog
 
 class DatasetsWidget(QGroupBox):
 
@@ -56,6 +57,8 @@ class DatasetsWidget(QGroupBox):
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
 
+        self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
+
     def remove_dataset(self, dataset):
         if dataset in self.imp_app.gl_widget.objects:
             self.imp_app.gl_widget.remove_object(dataset)
@@ -103,21 +106,9 @@ class DatasetsWidget(QGroupBox):
 
                 view_action.triggered.connect(view_embedding)
         if dataset.m > 2:
-            pca_to_2d = menu.addAction('PCA to 2D')
-
-            @pyqtSlot()
-            def make_2d_pca():
-                dataset.make_embedding(PCAEmbedder(n_components=2))
-
-            pca_to_2d.triggered.connect(make_2d_pca)
-
-            pca_to_4d = menu.addAction('PCA to 4D')
-
-            @pyqtSlot()
-            def make_4d_pca():
-                dataset.make_embedding(PCAEmbedder(n_components=4))
-
-            pca_to_4d.triggered.connect(make_4d_pca)
+            projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
+            project_action = menu.addAction('Project')
+            project_action.triggered.connect(projection_dialog.show)
         
         # Makes sure the menu pops up where the mouse pointer is.
         menu.exec_(self.tree_view.viewport().mapToGlobal(position))

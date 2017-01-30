@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 
 import numpy as np
 
-from modules.imp_opengl_widget import ImpOpenGLWidget
+from modules.opengl_widget import OpenGLWidget
 from modules.datasets_widget import DatasetsWidget
 from modules.visual_attributes_widget import VisualAttributesWidget
 from modules.dataset_2d import Dataset2D
@@ -21,7 +21,7 @@ class ImpApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.gl_widget = ImpOpenGLWidget(self)
+        self.gl_widget = OpenGLWidget(self)
         self.setCentralWidget(self.gl_widget)
         toolbar = self.addToolBar('Toolbar')
 
