@@ -6,8 +6,7 @@ import numpy as np
 
 from modules.opengl_widget import OpenGLWidget
 from modules.datasets_widget import DatasetsWidget
-from modules.visual_attributes_widget import VisualAttributesWidget
-from modules.dataset_2d import Dataset2D
+from modules.visuals_widget import VisualsWidget
 from modules.dataset import Dataset
 from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
@@ -46,8 +45,8 @@ class ImpApp(QMainWindow):
         pointsize_slider.setValue(8.0)
         visual_options_bar.addWidget(QLabel('Point size'))
         visual_options_bar.addWidget(pointsize_slider)
-        self.visual_attributes_widget = VisualAttributesWidget(imp_app=self)
-        visual_options_bar.addWidget(self.visual_attributes_widget)
+        self.visuals_widget = VisualsWidget(imp_app=self)
+        visual_options_bar.addWidget(self.visuals_widget)
 
         self.center()
         self.setWindowTitle('IMP: Interactive Multiscale Projections')

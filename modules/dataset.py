@@ -17,6 +17,7 @@ class Dataset(QObject):
         self._children = []
         self._item_data = item_data
         self._qItem = None
+        self._vbo = None
         if X is not None:
             self.set_data(X)
 
@@ -24,6 +25,7 @@ class Dataset(QObject):
         del self.X
         if self._parent is not None:
             self._parent.remove_child(self)
+        self.destroy_vbo()
 
     def parent(self):
         return self._parent
@@ -76,13 +78,31 @@ class Dataset(QObject):
         # Fetch data from worker, and delete it
         Y = self.embedding_worker.Y
         del self.embedding_worker # Your services are no longer needed.
-        
-        # Prevent cyclic imports..
-        from modules.dataset_2d import Dataset2D
 
-        new_child = Dataset2D(self.name + '_em', self, X=Y) # for now
+        new_child = Dataset(self.name + '_em', self, X=Y) # for now
         self.append_child(new_child)
         self.embedding_finished.emit(new_child)
+
+    def vbo(self):
+        if self._vbo is None:
+            self.make_vbo()
+        return self._vbo
+
+    def make_vbo(self):
+        X_32 = np.array(self.X, dtype=np.float32)
+        X_32 /= X_32.max() # Normalize for now.
+        
+        self._vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
+        self._vbo.create()
+        self._vbo.bind()
+        self._vbo.setUsagePattern(QOpenGLBuffer.StaticDraw)
+        self._vbo.allocate(X_32.data, X_32.data.nbytes)
+        self._vbo.release()
+
+    def destroy_vbo(self):
+        if self._vbo is not None:
+            self._vbo.destroy()
+            self._vbo = None
 
 class InputDataset(Dataset):
     # Emitted when input data is loaded

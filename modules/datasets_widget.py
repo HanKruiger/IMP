@@ -79,6 +79,20 @@ class DatasetsWidget(QGroupBox):
         # Build menu, based on characteristics of Dataset object.
         menu = QMenu()
 
+        if dataset.m <= 3:
+            if not self.imp_app.visuals_widget.is_in_attributes(dataset):
+                add_visual_attribute_action = menu.addAction('Add to visual attributes')
+                @pyqtSlot()
+                def add_to_visual_attributes():
+                    self.imp_app.visuals_widget.use_as_attribute(dataset)
+                add_visual_attribute_action.triggered.connect(add_to_visual_attributes)
+            else:
+                remove_visual_attribute_action = menu.addAction('Remove from visual attributes')
+                @pyqtSlot()
+                def remove_from_visual_attributes():
+                    self.imp_app.visuals_widget.remove_as_attribute(dataset)
+                remove_visual_attribute_action.triggered.connect(remove_from_visual_attributes)
+
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')
 
@@ -87,24 +101,6 @@ class DatasetsWidget(QGroupBox):
                 self.remove_dataset(dataset)
 
             delete_action.triggered.connect(delete_dataset)
-
-        if dataset.m == 2:
-            if dataset in self.imp_app.gl_widget.objects:
-                unview_action = menu.addAction('Unview')
-
-                @pyqtSlot()
-                def unview_embedding():
-                    self.imp_app.gl_widget.remove_object(dataset)
-
-                unview_action.triggered.connect(unview_embedding)
-            else:
-                view_action = menu.addAction('View')
-
-                @pyqtSlot()
-                def view_embedding():
-                    self.imp_app.gl_widget.add_object(dataset)
-
-                view_action.triggered.connect(view_embedding)
         if dataset.m > 2:
             projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
             project_action = menu.addAction('Project')

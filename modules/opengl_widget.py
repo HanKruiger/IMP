@@ -6,38 +6,14 @@ class OpenGLWidget(QOpenGLWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.objects = set()
 
         self.model = QMatrix4x4()
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
 
-    def clear(self):
-        for o in self.objects.copy():
-            self.remove_object(o)
+        self.attributes = dict()
 
-    def add_object(self, o):
-        self.objects.add(o)
-
-        self.makeCurrent()
-
-        o.init_buffers()
-        o.bind_to_shader(self.shader_program, self.gl)
-        
-        self.doneCurrent()
-        
-        self.update()
-
-    def remove_object(self, o):
-        self.objects.remove(o)
-
-        self.makeCurrent()
-
-        o.destroy_buffers()
-
-        self.doneCurrent()
-        
-        self.update()
+        self.N = 0
 
     def init_shaders(self, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
         self.shader_program = QOpenGLShaderProgram(self)
@@ -48,6 +24,60 @@ class OpenGLWidget(QOpenGLWidget):
             self.shader_program.addShaderFromSourceCode(QOpenGLShader.Fragment, fs.read())
         
         self.shader_program.link()
+
+    def init_vao(self):
+        self.vao = QOpenGLVertexArrayObject()
+        self.vao.create()
+
+    def clear(self):
+        pass
+
+    def set_attribute(self, vbo, N, m, attribute):
+        if self.attributes:
+            assert(self.N == N)
+        else:
+            self.N = N
+        self.attributes[attribute] = {'size': N}
+
+        self.makeCurrent()
+        # Bind the VAO. It will remember the enabled attributes
+        self.vao.bind()
+        
+        # Get the 'internal addresses' of the required attributes in the shader
+        self.shader_program.bind()
+        attrib_loc = self.shader_program.attributeLocation(attribute)
+        
+        # Explain the format of the 'position' attribute buffer to the shader.
+        self.shader_program.enableAttributeArray(attrib_loc)
+        vbo.bind()
+        self.shader_program.setAttributeBuffer(
+            attrib_loc,    # Attribute location
+            self.gl.GL_FLOAT,       # Data type of elements
+            0,                      # Offset
+            m,                      # Number of components per vertex
+            0                       # Stride
+        )
+        vbo.release()
+
+        self.shader_program.release()
+        
+        self.vao.release()
+        self.doneCurrent()
+        self.update()
+
+    def disable_attribute(self, attribute):
+        self.makeCurrent()
+        self.vao.bind()
+        self.shader_program.bind()
+        self.shader_program.disableAttributeArray(attribute)
+        self.shader_program.release()
+        self.vao.release()
+        self.doneCurrent()
+        self.update()
+
+        del self.attributes[attribute]
+        if not self.attributes:
+            self.N = 0
 
     def zoom(self, factor, pos):
         p_pixel = QVector3D(pos)
@@ -104,6 +134,7 @@ class OpenGLWidget(QOpenGLWidget):
         gl.initializeOpenGLFunctions()
 
         self.init_shaders()
+        self.init_vao()
 
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
         gl.glEnable(gl.GL_PROGRAM_POINT_SIZE);
@@ -122,8 +153,9 @@ class OpenGLWidget(QOpenGLWidget):
         self.shader_program.setUniformValue('projection', self.projection)
         self.shader_program.setUniformValue('point_size', self.point_size)
         
-        for o in self.objects:
-            o.draw(gl)
+        self.vao.bind()
+        gl.glDrawArrays(gl.GL_POINTS, 0, self.N)
+        self.vao.release()
 
         self.shader_program.release()
 
