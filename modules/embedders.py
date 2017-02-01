@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+from modules.dataset import Dataset
+
 import abc
 import os
 import numpy as np
@@ -14,8 +16,8 @@ class Embedder(QThread):
     def __init__(self):
         super().__init__()
 
-    def set_input(self, X):
-        self.X = X
+    def set_input(self, dataset):
+        self.in_dataset = dataset
 
     def set_parameters(self, parameters):
         self.parameters = parameters
@@ -41,10 +43,10 @@ class Embedder(QThread):
         return Y_cpy
 
     @classmethod
+    @abc.abstractmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2)
-        ]
+        """Method that should run parameters needed for the embedding,
+        along with their types and default values. """
 
 
 class PCAEmbedder(Embedder):
@@ -54,8 +56,15 @@ class PCAEmbedder(Embedder):
 
     def run(self):
         pca = PCA(**self.parameters)
-        self.Y = pca.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = pca.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='pca', X=Y)
+
+    @classmethod
+    def parameters_description(cls):
+        return [
+            ('n_components', int, 2)
+        ]
 
 
 class TSNEEmbedder(Embedder):
@@ -65,17 +74,17 @@ class TSNEEmbedder(Embedder):
 
     def run(self):
         tsne = TSNE(**self.parameters)
-        self.Y = tsne.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = tsne.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='tsne', X=Y)
 
     @classmethod
     def parameters_description(cls):
-        params = super().parameters_description()
-        params.extend([
+        return [
+            ('n_components', int, 2),
             ('perplexity', float, 30.0),
             ('n_iter', int, 200)
-        ])
-        return params
+        ]
 
 
 class LLEEmbedder(Embedder):
@@ -85,16 +94,16 @@ class LLEEmbedder(Embedder):
 
     def run(self):
         lle = LocallyLinearEmbedding(**self.parameters)
-        self.Y = lle.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = lle.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='lle', X=Y)
 
     @classmethod
     def parameters_description(cls):
-        params = super().parameters_description()
-        params.extend([
-            ('n_neighbors', int, 5),
-        ])
-        return params
+        return [
+            ('n_components', int, 2),
+            ('n_neighbors', int, 5)
+        ]
 
 
 class SpectralEmbedder(Embedder):
@@ -104,16 +113,16 @@ class SpectralEmbedder(Embedder):
 
     def run(self):
         lle = SpectralEmbedding(**self.parameters)
-        self.Y = lle.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = lle.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='spectral', X=Y)
 
     @classmethod
     def parameters_description(cls):
-        params = super().parameters_description()
-        params.extend([
+        return [
+            ('n_components', int, 2),
             ('n_neighbors', int, 5)
-        ])
-        return params
+        ]
 
 
 class MDSEmbedder(Embedder):
@@ -123,17 +132,17 @@ class MDSEmbedder(Embedder):
 
     def run(self):
         lle = MDS(**self.parameters)
-        self.Y = lle.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = lle.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='mds', X=Y)
 
     @classmethod
     def parameters_description(cls):
-        params = super().parameters_description()
-        params.extend([
+        return [
+            ('n_components', int, 2),
             ('max_iter', int, 300),
             ('metric', int, 1)
-        ])
-        return params
+        ]
 
 
 class IsomapEmbedder(Embedder):
@@ -143,13 +152,13 @@ class IsomapEmbedder(Embedder):
 
     def run(self):
         lle = Isomap(**self.parameters)
-        self.Y = lle.fit_transform(self.X)
-        self.Y = self.normalize(self.Y)
+        Y = lle.fit_transform(self.in_dataset.X)
+        Y = self.normalize(Y)
+        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='isomap', X=Y)
 
     @classmethod
     def parameters_description(cls):
-        params = super().parameters_description()
-        params.extend([
+        return [
+            ('n_components', int, 2),
             ('n_neighbors', int, 5)
-        ])
-        return params
+        ]

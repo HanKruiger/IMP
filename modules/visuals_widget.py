@@ -17,7 +17,7 @@ class VisualsWidget(QGroupBox):
 
         pointsize_slider = QSlider(Qt.Horizontal)
         pointsize_slider.setMinimum(1)
-        pointsize_slider.setMaximum(30)
+        pointsize_slider.setMaximum(100)
         pointsize_slider.valueChanged.connect(self.imp_app.gl_widget.set_pointsize)
         pointsize_slider.setValue(8)
         vbox_main.addWidget(QLabel('Point size'))

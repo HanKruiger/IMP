@@ -11,15 +11,24 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     embedding_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent=None, relation='root', X=None, item_data=None):
+    def __init__(self, name, parent=None, relation='root', X=None, item_data=None, support=None):
         super().__init__()
         self.name = name
         self._parent = parent
         self.relation = relation
+
+        # Not very elegant. Maybe replace with operator class
+        if relation in ['kmeans', 'mb_kmeans']:
+            self._is_clustering = True
+        else:
+            self._is_clustering = False
+        print(self._is_clustering)
+
         self._children = []
         self._item_data = item_data
-        self._qItem = None
+        self._q_item = None
         self._vbo = None
+        self._support = support
         if X is not None:
             self.set_data(X)
 
@@ -32,14 +41,14 @@ class Dataset(QObject):
     def parent(self):
         return self._parent
 
-    def qItem(self):
-        return self._qItem
+    def q_item(self):
+        return self._q_item
 
-    def set_qItem(self, qItem):
-        self._qItem = qItem
+    def set_q_item(self, q_item):
+        self._q_item = q_item
 
-    def child(self, row):
-        return self._children[i]
+    def child(self, idx):
+        return self._children[idx]
 
     def child_count(self):
         return len(self._children)
@@ -50,16 +59,11 @@ class Dataset(QObject):
     def remove_child(self, child):
         self._children.remove(child)
 
-    def row(self):
-        if self.parent() is not None:
-            return self.parent()._children.index(self)
-        return 0
+    def support(self):
+        return self._support
 
-    def column_count(self):
-        return len(self._item_data)
-
-    def data(self, column):
-        return self._item_data[column]
+    def is_clustering(self):
+        return self._is_clustering
 
     def set_data(self, X):
         self.X = X
@@ -71,17 +75,16 @@ class Dataset(QObject):
 
     def make_embedding(self, embedder):
         self.embedding_worker = embedder
-        embedder.set_input(self.X)
+        embedder.set_input(self)
         embedder.finished.connect(self.set_embedding)
         embedder.start()
 
     @pyqtSlot()
     def set_embedding(self):
         # Fetch data from worker, and delete it
-        Y = self.embedding_worker.Y
+        new_child = self.embedding_worker.out_dataset
         del self.embedding_worker  # Your services are no longer needed.
 
-        new_child = Dataset(self.name, self, 'embedding', X=Y)  # for now
         self.append_child(new_child)
         self.embedding_finished.emit(new_child)
 
@@ -113,7 +116,7 @@ class InputDataset(Dataset):
     data_ready = pyqtSignal()
 
     def __init__(self, path):
-        name = os.path.splitext(os.path.basename(path))[0]
+        name = os.path.basename(path).split('.')[0]
         super().__init__(name)
 
         # Load the data in a separate thread, so the GUI doesn't hang.
@@ -166,14 +169,14 @@ class DatasetItem(QStandardItem):
 
     def setData(self, data, role):
         if role == Qt.UserRole:
-            self.data = data
-            data.set_qItem(self)
+            self._data = data
+            data.set_q_item(self)
             self.emitDataChanged()
         else:
             super().setData(data, role)
 
     def data(self, role):
         if role == Qt.UserRole:
-            return self.data
+            return self._data
         else:
             return super().data(role)

@@ -4,8 +4,9 @@ from PyQt5.QtCore import *
 
 from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
-from modules.embedders import PCAEmbedder
+from modules.clusterers import ClusterReplicator
 from modules.projection_dialog import ProjectionDialog
+from modules.clustering_dialog import ClusteringDialog
 
 
 class DatasetsWidget(QGroupBox):
@@ -31,6 +32,26 @@ class DatasetsWidget(QGroupBox):
 
         self.setAcceptDrops(True)
 
+    def datasets(self):
+        datasets = set()
+
+        def add_to_set(dataset_item, datasets):
+            if not isinstance(dataset_item, DatasetItem):
+                return
+            datasets.add(dataset_item.data(role=Qt.UserRole))
+            if dataset_item.hasChildren():
+                for row in range(dataset_item.rowCount()):
+                    for col in range(dataset_item.columnCount()):
+                        add_to_set(dataset_item.child(row, col), datasets)
+
+        for idx in range(self.model.rowCount()):
+            dataset = self.model.data(self.model.index(idx, 0), role=Qt.UserRole)
+            dataset_item = dataset.q_item()
+            print(dataset_item)
+            add_to_set(dataset_item, datasets)
+
+        return datasets
+
     @pyqtSlot(object)
     def add_dataset(self, dataset):
         # Connect the dataset's s.t. when it has an embedding, that it adds it here.
@@ -51,7 +72,7 @@ class DatasetsWidget(QGroupBox):
             self.model.appendRow([dataset_item, N_item, m_item, rel_item])
         else:
             # Fetch the parent DatasetItem
-            parent_item = dataset.parent().qItem()
+            parent_item = dataset.parent().q_item()
 
             # Append the new dataset's row to the parent.
             parent_item.appendRow([dataset_item, N_item, m_item, rel_item])
@@ -68,9 +89,9 @@ class DatasetsWidget(QGroupBox):
     def remove_dataset(self, dataset):
         dataset.destroy()
         if dataset.parent() is not None:
-            self.model.removeRows(dataset.qItem().row(), 1, dataset.parent().qItem().index())
+            self.model.removeRows(dataset.q_item().row(), 1, dataset.parent().q_item().index())
         else:
-            self.model.removeRows(dataset.qItem().row(), 1)
+            self.model.removeRows(dataset.q_item().row(), 1)
 
     def open_menu(self, position):
         indexes = self.tree_view.selectedIndexes()
@@ -82,6 +103,29 @@ class DatasetsWidget(QGroupBox):
 
         # Build menu, based on characteristics of Dataset object.
         menu = QMenu()
+
+        if dataset.m > 2:
+            projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
+            project_action = menu.addAction('Project')
+            project_action.triggered.connect(projection_dialog.show)
+
+        clustering_dialog = ClusteringDialog(self, dataset, self.imp_app)
+        cluster_action = menu.addAction('Cluster')
+        cluster_action.triggered.connect(clustering_dialog.show)
+
+        clustered_datasets = [dataset for dataset in self.datasets() if dataset.is_clustering()]
+        matching_clusterings = [clustering for clustering in clustered_datasets if clustering.parent().N == dataset.N]
+        if matching_clusterings:
+            same_clustering_menu = menu.addMenu('Do same clustering as')
+            for clustering in matching_clusterings:
+                same_clustering_menu.addAction(clustering.name)
+
+                @pyqtSlot()
+                def replicate_clustering():
+                    dataset.make_embedding(ClusterReplicator(clustering))
+
+                same_clustering_menu.triggered.connect(replicate_clustering)
+
 
         if dataset.m <= 3:
             if not self.imp_app.visuals_widget.is_in_attributes(dataset):
@@ -107,10 +151,6 @@ class DatasetsWidget(QGroupBox):
                 self.remove_dataset(dataset)
 
             delete_action.triggered.connect(delete_dataset)
-        if dataset.m > 2:
-            projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
-            project_action = menu.addAction('Project')
-            project_action.triggered.connect(projection_dialog.show)
 
         # Makes sure the menu pops up where the mouse pointer is.
         menu.exec_(self.tree_view.viewport().mapToGlobal(position))

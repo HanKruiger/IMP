@@ -33,13 +33,20 @@ class OpenGLWidget(QOpenGLWidget):
         pass
 
     def set_attribute(self, vbo, N, m, attribute):
-        if self.attributes:
-            assert(self.N == N)
-        else:
-            self.N = N
+        # Remove this attribute if it is already set.
+        if attribute in self.attributes:
+            self.disable_attribute(attribute)
+
+        # Loop over attributes and remove the ones incompatible with N
+        for attr, descr in self.attributes.copy().items():
+            if descr['size'] != N:
+                self.disable_attribute(attr)
+
+        self.N = N
         self.attributes[attribute] = {'size': N}
 
         self.makeCurrent()
+
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
 
@@ -107,7 +114,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.update()
 
     def set_pointsize(self, point_size):
-        self.point_size = float(point_size)
+        self.point_size = float(point_size)**0.5
         self.update()
 
     # Receives value in 0-255 range
