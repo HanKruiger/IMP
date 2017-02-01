@@ -2,12 +2,12 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+
 class OpenGLWidget(QOpenGLWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.model = QMatrix4x4()
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
 
@@ -22,7 +22,7 @@ class OpenGLWidget(QOpenGLWidget):
         with open(vertex_shader, 'r') as vs, open(fragment_shader) as fs:
             self.shader_program.addShaderFromSourceCode(QOpenGLShader.Vertex, vs.read())
             self.shader_program.addShaderFromSourceCode(QOpenGLShader.Fragment, fs.read())
-        
+
         self.shader_program.link()
 
     def init_vao(self):
@@ -42,11 +42,11 @@ class OpenGLWidget(QOpenGLWidget):
         self.makeCurrent()
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
-        
+
         # Get the 'internal addresses' of the required attributes in the shader
         self.shader_program.bind()
         attrib_loc = self.shader_program.attributeLocation(attribute)
-        
+
         # Explain the format of the 'position' attribute buffer to the shader.
         self.shader_program.enableAttributeArray(attrib_loc)
         vbo.bind()
@@ -60,7 +60,7 @@ class OpenGLWidget(QOpenGLWidget):
         vbo.release()
 
         self.shader_program.release()
-        
+
         self.vao.release()
         self.doneCurrent()
         self.update()
@@ -81,7 +81,7 @@ class OpenGLWidget(QOpenGLWidget):
 
     def zoom(self, factor, pos):
         p_pixel = QVector3D(pos)
-        
+
         # Manually transform from pixel coordinates to clip coordinates.
         p_pixel *= QVector3D(2 / self.width(), 2 / self.height(), 1)
         p_pixel -= QVector3D(1, 1, 0)
@@ -96,7 +96,7 @@ class OpenGLWidget(QOpenGLWidget):
         if not invertible:
             print('Projection matrix is not invertible.')
             return
-        
+
         # Transform p from clip coordinates, through view coordinates, to world coordinates.
         p_world = view_i.map(projection_i.map(p_clip))
 
@@ -108,6 +108,11 @@ class OpenGLWidget(QOpenGLWidget):
 
     def set_pointsize(self, point_size):
         self.point_size = float(point_size)
+        self.update()
+
+    # Receives value in 0-255 range
+    def set_opacity(self, opacity):
+        self.opacity = opacity / 255
         self.update()
 
     def mousePressEvent(self, mouse_press_event):
@@ -130,29 +135,29 @@ class OpenGLWidget(QOpenGLWidget):
 
     def initializeGL(self):
         self.gl = self.context().versionFunctions()
-        gl = self.gl # Shorthand
+        gl = self.gl  # Shorthand
         gl.initializeOpenGLFunctions()
 
         self.init_shaders()
         self.init_vao()
 
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
-        gl.glEnable(gl.GL_PROGRAM_POINT_SIZE);
-        gl.glEnable(gl.GL_MULTISAMPLE);
-        gl.glEnable(gl.GL_BLEND);
-        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
+        gl.glEnable(gl.GL_PROGRAM_POINT_SIZE)
+        gl.glEnable(gl.GL_MULTISAMPLE)
+        gl.glEnable(gl.GL_BLEND)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
     def paintGL(self):
-        gl = self.gl # Shorthand
+        gl = self.gl  # Shorthand
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         self.shader_program.bind()
 
-        self.shader_program.setUniformValue('model', self.model)
         self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('projection', self.projection)
         self.shader_program.setUniformValue('point_size', self.point_size)
-        
+        self.shader_program.setUniformValue('opacity', self.opacity)
+
         self.vao.bind()
         gl.glDrawArrays(gl.GL_POINTS, 0, self.N)
         self.vao.release()
@@ -161,12 +166,12 @@ class OpenGLWidget(QOpenGLWidget):
 
     def resizeGL(self, w, h):
         # Make new projection matrix to retain aspect ratio
-        self.projection.setToIdentity();
+        self.projection.setToIdentity()
         if w > h:
-            self.projection.scale(h / w, 1.0);
+            self.projection.scale(h / w, 1.0)
         else:
-            self.projection.scale(1.0, w / h);
-        
+            self.projection.scale(1.0, w / h)
+
         # Define the new viewport (is this even necessary?)
         self.gl.glViewport(0, 0, w, h)
 

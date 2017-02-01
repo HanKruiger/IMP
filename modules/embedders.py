@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE, LocallyLinearEmbedding, Isomap, MDS, SpectralEmbedding
 
+
 class Embedder(QThread):
 
     def __init__(self):
@@ -29,7 +30,7 @@ class Embedder(QThread):
         # Translate s.t. smallest values for both x and y are 0.
         for dim in range(Y.shape[1]):
             Y_cpy[:, dim] += -Y_cpy[:, dim].min()
-            
+
         # Scale s.t. max(max(x, y)) = 1 (while keeping the same aspect ratio!)
         scaling = 1 / (np.absolute(Y_cpy).max())
         Y_cpy *= scaling
@@ -45,6 +46,7 @@ class Embedder(QThread):
             ('n_components', int, 2)
         ]
 
+
 class PCAEmbedder(Embedder):
 
     def __init__(self):
@@ -54,6 +56,7 @@ class PCAEmbedder(Embedder):
         pca = PCA(**self.parameters)
         self.Y = pca.fit_transform(self.X)
         self.Y = self.normalize(self.Y)
+
 
 class TSNEEmbedder(Embedder):
 
@@ -93,6 +96,7 @@ class LLEEmbedder(Embedder):
         ])
         return params
 
+
 class SpectralEmbedder(Embedder):
 
     def __init__(self):
@@ -110,6 +114,7 @@ class SpectralEmbedder(Embedder):
             ('n_neighbors', int, 5)
         ])
         return params
+
 
 class MDSEmbedder(Embedder):
 
@@ -129,6 +134,7 @@ class MDSEmbedder(Embedder):
             ('metric', int, 1)
         ])
         return params
+
 
 class IsomapEmbedder(Embedder):
 

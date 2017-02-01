@@ -4,6 +4,7 @@ from PyQt5.QtCore import *
 
 from modules.embedders import *
 
+
 class ProjectionDialog(QDialog):
 
     def __init__(self, parent, dataset, imp_app):
@@ -25,12 +26,12 @@ class ProjectionDialog(QDialog):
 
         project_button = QPushButton('Project')
         project_button.clicked.connect(self.project_and_close)
-        
+
         vbox = QVBoxLayout()
         vbox.addWidget(self.projection_technique)
         vbox.addLayout(self.parameters_layout)
         vbox.addWidget(project_button)
-        
+
         self.setLayout(vbox)
         self.build_parameters_ui()
 
@@ -61,7 +62,7 @@ class ProjectionDialog(QDialog):
 
     def build_parameters_ui(self, index=0):
         embedder_class = self.projection_technique.currentData(role=Qt.UserRole)
-        
+
         self.parameters = dict()
 
         self.clear_layout(self.parameters_layout)

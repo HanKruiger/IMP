@@ -33,6 +33,7 @@ vec3 colormap(float x) {
 }
 
 in float f_color;
+in float f_opacity;
 out vec4 out_color;
 
 void main() {
@@ -44,5 +45,5 @@ void main() {
 		discard;
 	}
 
-	out_color = vec4(colormap(f_color), 0.1);
+	out_color = vec4(colormap(f_color), f_opacity);
 }

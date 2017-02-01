@@ -12,6 +12,7 @@ from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
 from modules.embedders import PCAEmbedder
 
+
 class ImpApp(QMainWindow):
 
     def __init__(self):
@@ -34,17 +35,10 @@ class ImpApp(QMainWindow):
         dataset_bar = QToolBar('Datasets')
         dataset_bar.addWidget(self.datasets_widget)
         self.addToolBar(Qt.LeftToolBarArea, dataset_bar)
-        
+
         visual_options_bar = QToolBar('Visual options')
         self.addToolBar(Qt.RightToolBarArea, visual_options_bar)
 
-        pointsize_slider = QSlider(Qt.Horizontal)
-        pointsize_slider.setMinimum(1.0)
-        pointsize_slider.setMaximum(10.0)
-        pointsize_slider.valueChanged.connect(self.gl_widget.set_pointsize)
-        pointsize_slider.setValue(8.0)
-        visual_options_bar.addWidget(QLabel('Point size'))
-        visual_options_bar.addWidget(pointsize_slider)
         self.visuals_widget = VisualsWidget(imp_app=self)
         visual_options_bar.addWidget(self.visuals_widget)
 

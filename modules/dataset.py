@@ -5,15 +5,17 @@ from PyQt5.QtCore import *
 import os
 import numpy as np
 
+
 class Dataset(QObject):
-    
+
     # Emitted when (child) embedding is finished
     embedding_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent=None, X=None, item_data=None):
+    def __init__(self, name, parent=None, relation='root', X=None, item_data=None):
         super().__init__()
         self.name = name
         self._parent = parent
+        self.relation = relation
         self._children = []
         self._item_data = item_data
         self._qItem = None
@@ -77,9 +79,9 @@ class Dataset(QObject):
     def set_embedding(self):
         # Fetch data from worker, and delete it
         Y = self.embedding_worker.Y
-        del self.embedding_worker # Your services are no longer needed.
+        del self.embedding_worker  # Your services are no longer needed.
 
-        new_child = Dataset(self.name + '_em', self, X=Y) # for now
+        new_child = Dataset(self.name, self, 'embedding', X=Y)  # for now
         self.append_child(new_child)
         self.embedding_finished.emit(new_child)
 
@@ -90,8 +92,8 @@ class Dataset(QObject):
 
     def make_vbo(self):
         X_32 = np.array(self.X, dtype=np.float32)
-        X_32 /= X_32.max() # Normalize for now.
-        
+        X_32 /= X_32.max()  # Normalize for now.
+
         self._vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
         self._vbo.create()
         self._vbo.bind()
@@ -104,7 +106,9 @@ class Dataset(QObject):
             self._vbo.destroy()
             self._vbo = None
 
+
 class InputDataset(Dataset):
+
     # Emitted when input data is loaded
     data_ready = pyqtSignal()
 
@@ -117,6 +121,7 @@ class InputDataset(Dataset):
         # outside.)
         self.worker = DataLoadWorker(path)
         # Somehow I need this function, and cannot call the method directly...
+
         def wrapper():
             self.on_data_loaded()
         self.worker.finished.connect(wrapper)
@@ -129,15 +134,17 @@ class InputDataset(Dataset):
     def on_data_loaded(self):
         # Fetch data from worker, and delete it
         X = self.worker.data
-        del self.worker # Your services are no longer needed.
-        
+        del self.worker  # Your services are no longer needed.
+
         # Set the data.
         super().set_data(X)
-        
+
         # Tell that we're ready!
         self.data_ready.emit()
 
 # Worker class that loads the data in a separate thread
+
+
 class DataLoadWorker(QThread):
 
     def __init__(self, path):
@@ -147,6 +154,7 @@ class DataLoadWorker(QThread):
     def run(self):
         # Make numpy load the data
         self.data = np.loadtxt(self.path)
+
 
 class DatasetItem(QStandardItem):
 

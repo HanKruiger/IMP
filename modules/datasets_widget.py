@@ -7,6 +7,7 @@ from modules.dataset import InputDataset
 from modules.embedders import PCAEmbedder
 from modules.projection_dialog import ProjectionDialog
 
+
 class DatasetsWidget(QGroupBox):
 
     def __init__(self, imp_app):
@@ -14,17 +15,20 @@ class DatasetsWidget(QGroupBox):
         self.imp_app = imp_app
 
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(['Name', 'N', 'm'])
-        
+        self.model.setHorizontalHeaderLabels(['Name', 'N', 'm', 'rel'])
+
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
-        
+        # Resize column widths
+        for i in range(self.model.columnCount()):
+            self.tree_view.resizeColumnToContents(i)
+
         self.vbox_main = QVBoxLayout()
         self.vbox_main.addWidget(self.tree_view)
         self.setLayout(self.vbox_main)
-        
+
         self.setAcceptDrops(True)
 
     @pyqtSlot(object)
@@ -39,16 +43,18 @@ class DatasetsWidget(QGroupBox):
         N_item.setEditable(False)
         m_item = QStandardItem(str(dataset.m))
         m_item.setEditable(False)
+        rel_item = QStandardItem(str(dataset.relation))
+        rel_item.setEditable(False)
 
         if dataset.parent() is None:
             # Add it to the model's root node.
-            self.model.appendRow([dataset_item, N_item, m_item])
+            self.model.appendRow([dataset_item, N_item, m_item, rel_item])
         else:
             # Fetch the parent DatasetItem
             parent_item = dataset.parent().qItem()
 
             # Append the new dataset's row to the parent.
-            parent_item.appendRow([dataset_item, N_item, m_item])
+            parent_item.appendRow([dataset_item, N_item, m_item, rel_item])
 
             # Expand the parent. (This does not happen automatically)
             self.tree_view.expand(parent_item.index())
@@ -60,8 +66,6 @@ class DatasetsWidget(QGroupBox):
         self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
 
     def remove_dataset(self, dataset):
-        if dataset in self.imp_app.gl_widget.objects:
-            self.imp_app.gl_widget.remove_object(dataset)
         dataset.destroy()
         if dataset.parent() is not None:
             self.model.removeRows(dataset.qItem().row(), 1, dataset.parent().qItem().index())
@@ -82,12 +86,14 @@ class DatasetsWidget(QGroupBox):
         if dataset.m <= 3:
             if not self.imp_app.visuals_widget.is_in_attributes(dataset):
                 add_visual_attribute_action = menu.addAction('Add to visual attributes')
+
                 @pyqtSlot()
                 def add_to_visual_attributes():
                     self.imp_app.visuals_widget.use_as_attribute(dataset)
                 add_visual_attribute_action.triggered.connect(add_to_visual_attributes)
             else:
                 remove_visual_attribute_action = menu.addAction('Remove from visual attributes')
+
                 @pyqtSlot()
                 def remove_from_visual_attributes():
                     self.imp_app.visuals_widget.remove_as_attribute(dataset)
@@ -105,7 +111,7 @@ class DatasetsWidget(QGroupBox):
             projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
             project_action = menu.addAction('Project')
             project_action.triggered.connect(projection_dialog.show)
-        
+
         # Makes sure the menu pops up where the mouse pointer is.
         menu.exec_(self.tree_view.viewport().mapToGlobal(position))
 
