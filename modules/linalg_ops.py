@@ -22,16 +22,24 @@ class HorizontalConcat(Operator):
         
         Y = np.column_stack([in_dataset_1.X, in_dataset_2.X])
         
-        out_dataset = Dataset(in_dataset_1.name + '_cat', parent=in_dataset_1, relation='hcat', X=Y)
+        hidden = []
+        if self.parameters()['add_as_hidden']:
+            hidden.extend(range(in_dataset_1.m, in_dataset_1.m + in_dataset_2.m))
+
+        print(hidden)
+
+        out_dataset = Dataset(in_dataset_1.name + '_cat', parent=in_dataset_1, relation='hcat', X=Y, hidden=hidden)
         self.set_output(out_dataset)
 
     @classmethod
     def parameters_description(cls):
-        return []
+        return {
+            'add_as_hidden': (bool, True)
+        }
 
     @classmethod
     def input_description(cls):
-        return [
-            ('dataset1', Dataset, False),
-            ('dataset2', Dataset, False)
-        ]
+        return {
+            'dataset1': (Dataset, False),
+            'dataset2': (Dataset, False)
+        }

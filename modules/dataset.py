@@ -11,11 +11,12 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     operation_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent=None, relation='root', X=None, item_data=None, support=None):
+    def __init__(self, name, parent=None, relation='root', X=None, item_data=None, support=None, hidden=[]):
         super().__init__()
         self.name = name
         self._parent = parent
         self.relation = relation
+        self._hidden_features = hidden.copy()
 
         # Not very elegant. Maybe replace with operator class
         if relation in ['kmeans', 'mb_kmeans', 'clusterrep']:
@@ -71,6 +72,9 @@ class Dataset(QObject):
             self.m = 1
         else:
             self.m = X.shape[1]
+
+    def hidden_features(self):
+        return self._hidden_features
 
     def perform_operation(self, operator):
         self.embedding_worker = operator

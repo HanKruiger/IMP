@@ -35,22 +35,26 @@ class Embedder(Operator):
 
     def run(self):
         in_dataset = self.input()[0][0]
-        features = self.input()[0][1]
+        hidden_features = self.input()[0][1]
 
-        n_features = len(features)
-        n_hidden_features = in_dataset.m - n_features
+        n_hidden_features = len(hidden_features)
+        n_features = in_dataset.m - n_hidden_features
 
         mask = np.ones(in_dataset.m, dtype=bool)
-        mask[features,] = False
-        hidden_features = np.arange(in_dataset.m)[mask,]
+        mask[hidden_features,] = False
+        features = np.arange(in_dataset.m)[mask,]
         del mask
 
-        assert(len(hidden_features) == n_hidden_features)
+        assert(len(features) == n_features)
 
         # Filter out the subset of features that are used as input for the embedding
         X_use = in_dataset.X[:, features]
         # Do the embedding
         Y = self.embed(X_use)
+
+        embed_in_dim = X_use.shape[1]
+        embed_out_dim = Y.shape[1]
+        reduction = embed_in_dim - embed_out_dim
 
         # Filter out the subset that isn't used
         X_hidden = in_dataset.X[:, hidden_features]
@@ -58,7 +62,7 @@ class Embedder(Operator):
         # Concatenate the output of the embedding with the not-considered features
         Y = np.column_stack([Y, X_hidden])
 
-        out_dataset = Dataset(in_dataset.name + '_emb', parent=in_dataset, relation='emb', X=Y)
+        out_dataset = Dataset(in_dataset.name + '_emb', parent=in_dataset, relation='emb', X=Y, hidden=np.arange(embed_out_dim, embed_out_dim + n_hidden_features))
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -69,9 +73,9 @@ class Embedder(Operator):
     def input_description(cls):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
-        return [
-            ('dataset', Dataset, True)
-        ]
+        return {
+            'dataset': (Dataset, True)
+        }
 
 class PCAEmbedder(Embedder):
 
@@ -86,9 +90,9 @@ class PCAEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2)
-        ]
+        return {
+            'n_components': (int, 2)
+        }
 
 
 class TSNEEmbedder(Embedder):
@@ -104,11 +108,11 @@ class TSNEEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2),
-            ('perplexity', float, 30.0),
-            ('n_iter', int, 200)
-        ]
+        return {
+            'n_components': (int, 2),
+            'perplexity': (float, 30.0),
+            'n_iter': (int, 200)
+        }
 
 
 class LLEEmbedder(Embedder):
@@ -124,10 +128,10 @@ class LLEEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2),
-            ('n_neighbors', int, 5)
-        ]
+        return {
+            'n_components': (int, 2),
+            'n_neighbors': (int, 5)
+        }
 
 
 class SpectralEmbedder(Embedder):
@@ -143,10 +147,10 @@ class SpectralEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2),
-            ('n_neighbors', int, 5)
-        ]
+        return {
+            'n_components': (int, 2),
+            'n_neighbors': (int, 5)
+        }
 
 
 class MDSEmbedder(Embedder):
@@ -162,11 +166,11 @@ class MDSEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2),
-            ('max_iter', int, 300),
-            ('metric', int, 1)
-        ]
+        return {
+            'n_components': (int, 2),
+            'max_iter': (int, 300),
+            'metric': (int, 1)
+        }
 
 
 class IsomapEmbedder(Embedder):
@@ -182,7 +186,7 @@ class IsomapEmbedder(Embedder):
 
     @classmethod
     def parameters_description(cls):
-        return [
-            ('n_components', int, 2),
-            ('n_neighbors', int, 5)
-        ]
+        return {
+            'n_components': (int, 2),
+            'n_neighbors': (int, 5)
+        }

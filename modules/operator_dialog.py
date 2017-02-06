@@ -46,25 +46,25 @@ class OperatorDialog(QDialog):
         operator_class = self.operators.currentData(role=Qt.UserRole)
 
         input_data = [None for _ in range(len(self.input_data))]
-        input_featuress = [None for _ in range(len(self.input_data))]
+        input_hidden_features = [None for _ in range(len(self.input_data))]
         for i, input_widget in enumerate(self.input_data.values()):
             dataset = input_widget.get_dataset()
             input_data[i] = dataset
-            input_featuress[i] = input_widget.get_features()
+            input_hidden_features[i] = input_widget.hidden_features()
         input_data = tuple(input_data)
-        input_featuress = tuple(input_featuress)
+        input_hidden_features = tuple(input_hidden_features)
 
         parameters = {}
         for name, (input_widget, data_type) in self.parameters.items():
             if data_type == int or data_type == float:
                 if input_widget.hasAcceptableInput():
                     parameters[name] = data_type(input_widget.text())
-            elif data_type == Dataset:
-                parameters[name] = input_widget.currentData(role=Qt.UserRole)
+            elif data_type == bool:
+                parameters[name] = input_widget.isChecked()
 
         operator = operator_class()
         operator.set_parameters(parameters)
-        operator.set_inputs(input_data, input_featuress)
+        operator.set_inputs(input_data, input_hidden_features)
 
         self.imp_app.statusBar().showMessage('Performing operation with {}...'.format(operator_class.__name__))
         input_data[0].perform_operation(operator)
@@ -86,7 +86,7 @@ class OperatorDialog(QDialog):
         self.input_data = dict()
         self.clear_layout(self.input_layout)
 
-        for name, data_type, select_features in operator_class.input_description():
+        for name, (data_type, select_features) in operator_class.input_description().items():
             input_dataset_selector = InputDatasetSelector(name, self.imp_app.datasets_widget.datasets(), select_features)
             input_dataset_selector.select(self.dataset)
             self.input_layout.addLayout(input_dataset_selector)
@@ -95,7 +95,7 @@ class OperatorDialog(QDialog):
         self.parameters = dict()
         self.clear_layout(self.parameters_layout)
 
-        for name, data_type, default in operator_class.parameters_description():
+        for name, (data_type, default) in operator_class.parameters_description().items():
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel(name))
             if data_type == float or data_type == int:
@@ -108,6 +108,11 @@ class OperatorDialog(QDialog):
 
                 hbox.addWidget(input_box)
                 self.parameters[name] = input_box, data_type
+            elif data_type == bool:
+                check_box = QCheckBox(name)
+                check_box.setChecked(default)
+                hbox.addWidget(check_box)
+                self.parameters[name] = check_box, data_type
 
             self.parameters_layout.addLayout(hbox)
 
@@ -116,8 +121,7 @@ class InputDatasetSelector(QHBoxLayout):
     def __init__(self, name, datasets, select_features):
         super().__init__()
         self.combobox = QComboBox()
-        self.start_feature = QLineEdit()
-        self.end_feature = QLineEdit()
+        self.hidden_features_edit = QLineEdit()
 
         self.combobox = QComboBox()
         for dataset in datasets:
@@ -128,26 +132,25 @@ class InputDatasetSelector(QHBoxLayout):
         self.addWidget(QLabel(name))
         self.addWidget(self.combobox)
         if select_features:
-            self.addWidget(self.start_feature)
-            self.addWidget(self.end_feature)
+            self.addWidget(QLabel('Hidden features'))
+            self.addWidget(self.hidden_features_edit)
 
     def select(self, dataset):
-        # Set the clicked dataset as default input for all inputs.
+        # Set the clicked dataset as initial input choice
         idx = self.combobox.findData(dataset)
         if idx != -1:
             self.combobox.setCurrentIndex(idx)
-        self.start_feature.setText(str(0))
-        self.end_feature.setText(str(dataset.m))
+        self.hidden_features_edit.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
 
     @pyqtSlot(int)
     def on_index_change(self, index):
-        # Set the clicked dataset as default input for all inputs.
         dataset = self.combobox.currentData(role=Qt.UserRole)
-        self.start_feature.setText(str(0))
-        self.end_feature.setText(str(dataset.m))
+        self.hidden_features_edit.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
 
     def get_dataset(self):
         return self.combobox.currentData(role=Qt.UserRole)
     
-    def get_features(self):
-        return range(int(self.start_feature.text()), int(self.end_feature.text()))
+    def hidden_features(self):
+        input_text = self.hidden_features_edit.text()
+        hidden_features = [int(feature) for feature in input_text.split(',') if feature != '']
+        return hidden_features
