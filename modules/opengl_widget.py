@@ -73,18 +73,22 @@ class OpenGLWidget(QOpenGLWidget):
         self.update()
 
     def disable_attribute(self, attribute):
-        self.makeCurrent()
-        self.vao.bind()
-        self.shader_program.bind()
-        self.shader_program.disableAttributeArray(attribute)
-        self.shader_program.release()
-        self.vao.release()
-        self.doneCurrent()
-        self.update()
+        try:
+            del self.attributes[attribute]
+            if not self.attributes:
+                self.N = 0
 
-        del self.attributes[attribute]
-        if not self.attributes:
-            self.N = 0
+            self.makeCurrent()
+            self.vao.bind()
+            self.shader_program.bind()
+            self.shader_program.disableAttributeArray(attribute)
+            self.shader_program.release()
+            self.vao.release()
+            self.doneCurrent()
+            self.update()
+
+        except KeyError:
+            print('Tried to disable attrubute that was not enabled.')
 
     def zoom(self, factor, pos):
         p_pixel = QVector3D(pos)

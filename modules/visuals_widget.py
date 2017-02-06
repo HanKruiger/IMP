@@ -14,6 +14,7 @@ class VisualsWidget(QGroupBox):
         self.imp_app = imp_app
         vbox_main = QVBoxLayout()
         self.setLayout(vbox_main)
+        self._current_dataset = None
 
         pointsize_slider = QSlider(Qt.Horizontal)
         pointsize_slider.setMinimum(1)
@@ -32,12 +33,15 @@ class VisualsWidget(QGroupBox):
         vbox_main.addWidget(opacity_slider)
 
         self.attributes = {
-            'position': AttributeComboBox('position', self.imp_app),
-            'color': AttributeComboBox('color', self.imp_app)
+            'position_x': AttributeComboBox('position_x', self, self.imp_app),
+            'position_y': AttributeComboBox('position_y', self, self.imp_app),
+            'color': AttributeComboBox('color', self, self.imp_app)
         }
 
         self.attribute_datasets_model = QStandardItemModel()
-        self.attribute_datasets_model.appendRow(QStandardItem(None))
+        empty_item = QStandardItem('Pick one')
+        empty_item.setData(-1, role=Qt.UserRole)
+        self.attribute_datasets_model.appendRow(empty_item)
 
         clear_button = QPushButton('Clear')
         clear_button.clicked.connect(self.clear_attributes)
@@ -52,53 +56,46 @@ class VisualsWidget(QGroupBox):
             hbox.addWidget(combo_box)
             vbox_main.addLayout(hbox)
 
-    def use_as_attribute(self, dataset):
-        item = QStandardItem(dataset.name)
-        item.setData(dataset, role=Qt.UserRole)
-        self.attribute_datasets_model.appendRow(item)
+    def update_attribute_list(self, dataset):
+        self.clear_attributes()
+        self._current_dataset = dataset
+        for dim in range(dataset.m):
+            item = QStandardItem('{}:{}'.format(dataset.name, dim))
+            item.setData(dim, role=Qt.UserRole)
+            self.attribute_datasets_model.appendRow(item)
 
-    def is_in_attributes(self, dataset):
-        for idx in range(self.attribute_datasets_model.rowCount()):
-            item = self.attribute_datasets_model.item(idx)
-            if item is not None and item.data(role=Qt.UserRole) == dataset:
-                return True
-        return False
-
-    def remove_as_attribute(self, dataset):
-        for idx in range(self.attribute_datasets_model.rowCount()):
-            item = self.attribute_datasets_model.item(idx)
-            if item is not None and item.data(role=Qt.UserRole) == dataset:
-                succeeded = self.attribute_datasets_model.removeRow(idx)
-                if succeeded:
-                    dataset.destroy_vbo()
-                    return
-                else:
-                    print('Failed to remove attribute!')
+    def current_dataset(self):
+        return self._current_dataset
 
     def clear_attributes(self):
         for idx in reversed(range(self.attribute_datasets_model.rowCount())):
             item = self.attribute_datasets_model.item(idx)
             if item is not None:
-                dataset = item.data(role=Qt.UserRole)
-                if isinstance(dataset, Dataset):
+                if item.data(role=Qt.UserRole) != -1:
                     succeeded = self.attribute_datasets_model.removeRow(idx)
-                    if succeeded:
-                        dataset.destroy_vbo()
-                    else:
+                    if not succeeded:
                         print('Failed to remove attribute!')
+
+        if self.current_dataset() is not None:
+            self.current_dataset().destroy_vbos()
+            self._current_dataset = None
 
 
 class AttributeComboBox(QComboBox):
 
-    def __init__(self, attribute, imp_app):
+    def __init__(self, attribute, v_widget, imp_app):
         super().__init__()
         self.attribute = attribute
         self.imp_app = imp_app
+        self.v_widget = v_widget
 
     @pyqtSlot(int)
     def set_attribute(self, index):
-        dataset = self.model().item(index).data(role=Qt.UserRole)
-        if dataset is None:
+        item = self.model().item(index)
+        dim = item.data(role=Qt.UserRole)
+        dataset = self.v_widget.current_dataset()
+
+        if dim == -1:
             self.imp_app.gl_widget.disable_attribute(self.attribute)
         else:
-            self.imp_app.gl_widget.set_attribute(dataset.vbo(), dataset.N, dataset.m, self.attribute)
+            self.imp_app.gl_widget.set_attribute(dataset.vbo(dim), dataset.N, 1, self.attribute)

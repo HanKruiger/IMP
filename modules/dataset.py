@@ -9,7 +9,7 @@ import numpy as np
 class Dataset(QObject):
 
     # Emitted when (child) embedding is finished
-    embedding_finished = pyqtSignal(object)
+    operation_finished = pyqtSignal(object)
 
     def __init__(self, name, parent=None, relation='root', X=None, item_data=None, support=None):
         super().__init__()
@@ -18,16 +18,15 @@ class Dataset(QObject):
         self.relation = relation
 
         # Not very elegant. Maybe replace with operator class
-        if relation in ['kmeans', 'mb_kmeans']:
+        if relation in ['kmeans', 'mb_kmeans', 'clusterrep']:
             self._is_clustering = True
         else:
             self._is_clustering = False
-        print(self._is_clustering)
 
         self._children = []
         self._item_data = item_data
         self._q_item = None
-        self._vbo = None
+        self._vbos = dict()
         self._support = support
         if X is not None:
             self.set_data(X)
@@ -36,7 +35,7 @@ class Dataset(QObject):
         del self.X
         if self._parent is not None:
             self._parent.remove_child(self)
-        self.destroy_vbo()
+        self.destroy_vbos()
 
     def parent(self):
         return self._parent
@@ -73,41 +72,51 @@ class Dataset(QObject):
         else:
             self.m = X.shape[1]
 
-    def make_embedding(self, embedder):
-        self.embedding_worker = embedder
-        embedder.set_input(self)
-        embedder.finished.connect(self.set_embedding)
-        embedder.start()
+    def perform_operation(self, operator):
+        self.embedding_worker = operator
+        operator.finished.connect(self.operator_finished)
+        operator.start()
 
     @pyqtSlot()
-    def set_embedding(self):
+    def operator_finished(self):
         # Fetch data from worker, and delete it
-        new_child = self.embedding_worker.out_dataset
+        result = self.embedding_worker.output()
         del self.embedding_worker  # Your services are no longer needed.
 
-        self.append_child(new_child)
-        self.embedding_finished.emit(new_child)
+        if type(result) == tuple:
+            for child in result:
+                self.append_child(child)
+                self.operation_finished.emit(child)
+        else:
+            self.append_child(result)
+            self.operation_finished.emit(result)
 
-    def vbo(self):
-        if self._vbo is None:
-            self.make_vbo()
-        return self._vbo
+    def vbo(self, dim):
+        try:
+            return self._vbos[dim]
+        except KeyError:
+            return self.make_vbo(dim)
 
-    def make_vbo(self):
-        X_32 = np.array(self.X, dtype=np.float32)
+    def make_vbo(self, dim):
+        X_32 = np.array(self.X[:, dim], dtype=np.float32)
         X_32 /= X_32.max()  # Normalize for now.
 
-        self._vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
-        self._vbo.create()
-        self._vbo.bind()
-        self._vbo.setUsagePattern(QOpenGLBuffer.StaticDraw)
-        self._vbo.allocate(X_32.data, X_32.data.nbytes)
-        self._vbo.release()
+        self._vbos[dim] = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
+        self._vbos[dim].create()
+        self._vbos[dim].bind()
+        self._vbos[dim].setUsagePattern(QOpenGLBuffer.StaticDraw)
+        self._vbos[dim].allocate(X_32.data, X_32.data.nbytes)
+        self._vbos[dim].release()
+        return self._vbos[dim]
 
-    def destroy_vbo(self):
-        if self._vbo is not None:
-            self._vbo.destroy()
-            self._vbo = None
+    def destroy_vbos(self):
+        for dim, vbo in self._vbos.copy().items():
+            vbo.destroy()
+            del self._vbos[dim]
+
+    def destroy_vbo(self, dim):
+        self._vbos[dim].destroy()
+        del self._vbos[dim]
 
 
 class InputDataset(Dataset):

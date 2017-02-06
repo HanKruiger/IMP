@@ -3,6 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from modules.dataset import Dataset
+from modules.operator import Operator
 
 import abc
 import os
@@ -10,34 +11,28 @@ import numpy as np
 from sklearn.cluster import KMeans, MiniBatchKMeans
 
 
-class Clusterer(QThread):
+class Clusterer(Operator):
 
     def __init__(self):
         super().__init__()
-
-    def set_input(self, dataset):
-        self.in_dataset = dataset
-
-    def set_parameters(self, parameters):
-        self.parameters = parameters
 
     @staticmethod
     def find_support(labels, n_clusters):
         support = dict()
         for i in range(n_clusters):
-            idcs = np.where(labels == i)
+            idcs = np.where(labels == i)[0]
+            if len(idcs) == 0:
+                print('No support for {}'.format(idcs))
             support[i] = idcs
         return support
 
-    @abc.abstractmethod
-    def run(self):
-        """Method that should run the clustering"""
-
     @classmethod
-    @abc.abstractmethod
-    def parameters_description(cls):
-        """Method that should run parameters needed for the embedding,
+    def input_description(cls):
+        """Method that should run parameters needed for the operator,
         along with their types and default values. """
+        return [
+            ('dataset', Dataset)
+        ]
 
 
 class KMeansClusterer(Clusterer):
@@ -46,14 +41,14 @@ class KMeansClusterer(Clusterer):
         super().__init__()
 
     def run(self):
-        kmeans = KMeans(**self.parameters)
-        kmeans.fit(self.in_dataset.X)
+        kmeans = KMeans(**self.parameters())
+        kmeans.fit(self.input()[0].X)
         Y = kmeans.cluster_centers_
         X_labels = kmeans.labels_
 
-        support = self.find_support(X_labels, self.parameters['n_clusters'])
+        support = self.find_support(X_labels, self.parameters()['n_clusters'])
 
-        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='kmeans', X=Y, support=support)
+        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='kmeans', X=Y, support=support))
 
     
     @classmethod
@@ -69,32 +64,21 @@ class MiniBatchKMeansClusterer(Clusterer):
         super().__init__()
 
     def run(self):
-        kmeans = MiniBatchKMeans(**self.parameters)
-        kmeans.fit(self.in_dataset.X)
+        kmeans = MiniBatchKMeans(**self.parameters())
+        kmeans.fit(self.input()[0].X)
         Y = kmeans.cluster_centers_
         X_labels = kmeans.labels_
 
-        support = self.find_support(X_labels, self.parameters['n_clusters'])
+        support = self.find_support(X_labels, self.parameters()['n_clusters'])
 
-        self.out_dataset = Dataset(self.in_dataset.name, parent=self.in_dataset, relation='mb_kmeans', X=Y, support=support)
+        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='mb_kmeans', X=Y, support=support))
 
     
     @classmethod
     def parameters_description(cls):
         return [
             ('n_clusters', int, 1000),
-            ('batch_size', int, 1000)
+            ('batch_size', int, 1000),
+            ('max_iter', int, 100),
+            ('reassignment_ratio', int, 0.01)
         ]
-
-class ClusterReplicator(Clusterer):
-    def __init__(self, clustering):
-        super().__init__()
-        self.support = clustering.support
-
-    def run(self):
-        Y = np.zeros((len(self.support), self.in_dataset.X.shape[1]))
-        for idx, support in self.support.items():
-            print(idx)
-            print(support)
-            # TODO: Compute which row from in_dataset.X should be placed to represent the cluster.
-        self.out_dataset = None

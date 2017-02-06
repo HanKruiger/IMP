@@ -4,9 +4,8 @@ from PyQt5.QtCore import *
 
 from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
-from modules.clusterers import ClusterReplicator
-from modules.projection_dialog import ProjectionDialog
-from modules.clustering_dialog import ClusteringDialog
+from modules.operator_dialog import OperatorDialog
+# from modules.clustering_dialog import ClusteringDialog
 
 
 class DatasetsWidget(QGroupBox):
@@ -17,11 +16,14 @@ class DatasetsWidget(QGroupBox):
 
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(['Name', 'N', 'm', 'rel'])
+        self.model.dataChanged.connect(self.data_changed)
+
 
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
+
         # Resize column widths
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
@@ -47,15 +49,20 @@ class DatasetsWidget(QGroupBox):
         for idx in range(self.model.rowCount()):
             dataset = self.model.data(self.model.index(idx, 0), role=Qt.UserRole)
             dataset_item = dataset.q_item()
-            print(dataset_item)
             add_to_set(dataset_item, datasets)
 
         return datasets
 
+    def data_changed(self, topleft, bottomright, roles):
+        dataset = self.model.data(topleft, role=Qt.UserRole)
+        new_name = self.model.data(topleft, role=Qt.DisplayRole)
+
+        dataset.set_name(new_name)
+
     @pyqtSlot(object)
     def add_dataset(self, dataset):
         # Connect the dataset's s.t. when it has an embedding, that it adds it here.
-        dataset.embedding_finished.connect(self.add_dataset)
+        dataset.operation_finished.connect(self.add_dataset)
 
         dataset_item = DatasetItem(dataset.name)
         dataset_item.setData(dataset, role=Qt.UserRole)
@@ -87,6 +94,9 @@ class DatasetsWidget(QGroupBox):
         self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
 
     def remove_dataset(self, dataset):
+        if dataset == self.imp_app.visuals_widget.current_dataset():
+            self.imp_app.visuals_widget.clear_attributes()
+
         dataset.destroy()
         if dataset.parent() is not None:
             self.model.removeRows(dataset.q_item().row(), 1, dataset.parent().q_item().index())
@@ -104,44 +114,24 @@ class DatasetsWidget(QGroupBox):
         # Build menu, based on characteristics of Dataset object.
         menu = QMenu()
 
-        if dataset.m > 2:
-            projection_dialog = ProjectionDialog(self, dataset, self.imp_app)
-            project_action = menu.addAction('Project')
-            project_action.triggered.connect(projection_dialog.show)
+        operator_dialog = OperatorDialog(self, dataset, self.imp_app)
+        operator_action = menu.addAction('Perform operation')
+        operator_action.triggered.connect(operator_dialog.show)
 
-        clustering_dialog = ClusteringDialog(self, dataset, self.imp_app)
-        cluster_action = menu.addAction('Cluster')
-        cluster_action.triggered.connect(clustering_dialog.show)
+        if not self.imp_app.visuals_widget.current_dataset() == dataset:
+            add_visual_attribute_action = menu.addAction('Add to visual attributes')
 
-        clustered_datasets = [dataset for dataset in self.datasets() if dataset.is_clustering()]
-        matching_clusterings = [clustering for clustering in clustered_datasets if clustering.parent().N == dataset.N]
-        if matching_clusterings:
-            same_clustering_menu = menu.addMenu('Do same clustering as')
-            for clustering in matching_clusterings:
-                same_clustering_menu.addAction(clustering.name)
+            @pyqtSlot()
+            def add_to_visual_attributes():
+                self.imp_app.visuals_widget.update_attribute_list(dataset)
+            add_visual_attribute_action.triggered.connect(add_to_visual_attributes)
+        else:
+            remove_visual_attribute_action = menu.addAction('Remove from visual attributes')
 
-                @pyqtSlot()
-                def replicate_clustering():
-                    dataset.make_embedding(ClusterReplicator(clustering))
-
-                same_clustering_menu.triggered.connect(replicate_clustering)
-
-
-        if dataset.m <= 3:
-            if not self.imp_app.visuals_widget.is_in_attributes(dataset):
-                add_visual_attribute_action = menu.addAction('Add to visual attributes')
-
-                @pyqtSlot()
-                def add_to_visual_attributes():
-                    self.imp_app.visuals_widget.use_as_attribute(dataset)
-                add_visual_attribute_action.triggered.connect(add_to_visual_attributes)
-            else:
-                remove_visual_attribute_action = menu.addAction('Remove from visual attributes')
-
-                @pyqtSlot()
-                def remove_from_visual_attributes():
-                    self.imp_app.visuals_widget.remove_as_attribute(dataset)
-                remove_visual_attribute_action.triggered.connect(remove_from_visual_attributes)
+            @pyqtSlot()
+            def remove_from_visual_attributes():
+                self.imp_app.visuals_widget.clear_attributes()
+            remove_visual_attribute_action.triggered.connect(remove_from_visual_attributes)
 
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')
