@@ -26,12 +26,51 @@ class Clusterer(Operator):
             support[i] = idcs
         return support
 
+    def run(self):
+        in_dataset = self.input()[0][0]
+        features = self.input()[0][1]
+
+        n_features = len(features)
+        n_hidden_features = in_dataset.m - n_features
+
+        mask = np.ones(in_dataset.m, dtype=bool)
+        mask[features,] = False
+        hidden_features = np.arange(in_dataset.m)[mask,]
+        del mask
+
+        assert(len(hidden_features) == n_hidden_features)
+
+        # Filter out the non-hidden features that are used as input for the clustering
+        X_use = in_dataset.X[:, features]
+        # Do the clustering
+        Y, X_labels = self.cluster(X_use)
+
+        n_clusters = Y.shape[0]
+
+        support = self.find_support(X_labels, n_clusters)
+
+        # Assign averaged values (over the support) to the representatives' hidden features
+        X_hidden = in_dataset.X[:, hidden_features]
+        Y_hidden = np.zeros((n_clusters, n_hidden_features))
+        for i in range(n_clusters):
+            Y_hidden[i, :] = X_hidden[support[i], :].mean(axis=0)
+        
+        # Concatenate the output of the clustering with the averaged hidden features
+        Y = np.column_stack([Y, Y_hidden])
+
+        out_dataset = Dataset(in_dataset.name + '_clus', parent=in_dataset, relation='clus', X=Y, support=support)
+        self.set_output(out_dataset)
+
+    @abc.abstractmethod
+    def embed(self, X):
+        """Method that should do the clustering"""
+
     @classmethod
     def input_description(cls):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
         return [
-            ('dataset', Dataset)
+            ('dataset', Dataset, True)
         ]
 
 
@@ -40,15 +79,11 @@ class KMeansClusterer(Clusterer):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def cluster(self, X):
         kmeans = KMeans(**self.parameters())
-        kmeans.fit(self.input()[0].X)
-        Y = kmeans.cluster_centers_
-        X_labels = kmeans.labels_
+        kmeans.fit(X)
 
-        support = self.find_support(X_labels, self.parameters()['n_clusters'])
-
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='kmeans', X=Y, support=support))
+        return kmeans.cluster_centers_, kmeans.labels_
 
     
     @classmethod
@@ -63,15 +98,11 @@ class MiniBatchKMeansClusterer(Clusterer):
     def __init__(self):
         super().__init__()
 
-    def run(self):
-        kmeans = MiniBatchKMeans(**self.parameters())
-        kmeans.fit(self.input()[0].X)
-        Y = kmeans.cluster_centers_
-        X_labels = kmeans.labels_
+    def cluster(self, X):
+        mbkmeans = MiniBatchKMeans(**self.parameters())
+        mbkmeans.fit(X)
 
-        support = self.find_support(X_labels, self.parameters()['n_clusters'])
-
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='mb_kmeans', X=Y, support=support))
+        return mbkmeans.cluster_centers_, mbkmeans.labels_
 
     
     @classmethod

@@ -33,12 +33,44 @@ class Embedder(Operator):
 
         return Y_cpy
 
+    def run(self):
+        in_dataset = self.input()[0][0]
+        features = self.input()[0][1]
+
+        n_features = len(features)
+        n_hidden_features = in_dataset.m - n_features
+
+        mask = np.ones(in_dataset.m, dtype=bool)
+        mask[features,] = False
+        hidden_features = np.arange(in_dataset.m)[mask,]
+        del mask
+
+        assert(len(hidden_features) == n_hidden_features)
+
+        # Filter out the subset of features that are used as input for the embedding
+        X_use = in_dataset.X[:, features]
+        # Do the embedding
+        Y = self.embed(X_use)
+
+        # Filter out the subset that isn't used
+        X_hidden = in_dataset.X[:, hidden_features]
+        
+        # Concatenate the output of the embedding with the not-considered features
+        Y = np.column_stack([Y, X_hidden])
+
+        out_dataset = Dataset(in_dataset.name + '_emb', parent=in_dataset, relation='emb', X=Y)
+        self.set_output(out_dataset)
+
+    @abc.abstractmethod
+    def embed(self, X):
+        """Method that should do the embedding"""
+
     @classmethod
     def input_description(cls):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
         return [
-            ('dataset', Dataset)
+            ('dataset', Dataset, True)
         ]
 
 class PCAEmbedder(Embedder):
@@ -46,11 +78,11 @@ class PCAEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def embed(self, X):
         pca = PCA(**self.parameters())
-        Y = pca.fit_transform(self.input()[0].X)
+        Y = pca.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='pca', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):
@@ -64,11 +96,11 @@ class TSNEEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def embed(self, X):
         tsne = TSNE(**self.parameters())
-        Y = tsne.fit_transform(self.input()[0].X)
+        Y = tsne.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='tsne', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):
@@ -84,11 +116,11 @@ class LLEEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def embed(self, X):
         lle = LocallyLinearEmbedding(**self.parameters())
-        Y = lle.fit_transform(self.input()[0].X)
+        Y = lle.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='lle', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):
@@ -103,11 +135,11 @@ class SpectralEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
-        lle = SpectralEmbedding(**self.parameters())
-        Y = lle.fit_transform(self.input()[0].X)
+    def embed(self, X):
+        se = SpectralEmbedding(**self.parameters())
+        Y = se.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='spectral', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):
@@ -122,11 +154,11 @@ class MDSEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
-        lle = MDS(**self.parameters())
-        Y = lle.fit_transform(self.input()[0].X)
+    def embed(self, X):
+        mds = MDS(**self.parameters())
+        Y = mds.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='mds', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):
@@ -142,11 +174,11 @@ class IsomapEmbedder(Embedder):
     def __init__(self):
         super().__init__()
 
-    def run(self):
-        lle = Isomap(**self.parameters())
-        Y = lle.fit_transform(self.input()[0].X)
+    def embed(self, X):
+        isomap = Isomap(**self.parameters())
+        Y = isomap.fit_transform(X)
         Y = self.normalize(Y)
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='isomap', X=Y))
+        return Y
 
     @classmethod
     def parameters_description(cls):

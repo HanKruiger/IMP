@@ -15,8 +15,15 @@ class HorizontalConcat(Operator):
         super().__init__()
 
     def run(self):
-        Y = np.column_stack([dataset.X for dataset in self.input()])
-        self.set_output(Dataset(self.input()[0].name, parent=self.input()[0], relation='hcat', X=Y))
+        in_dataset_1 = self.input()[0][0]
+        in_dataset_2 = self.input()[1][0]
+
+        assert(in_dataset_1.N == in_dataset_2.N)
+        
+        Y = np.column_stack([in_dataset_1.X, in_dataset_2.X])
+        
+        out_dataset = Dataset(in_dataset_1.name + '_cat', parent=in_dataset_1, relation='hcat', X=Y)
+        self.set_output(out_dataset)
 
     @classmethod
     def parameters_description(cls):
@@ -25,6 +32,6 @@ class HorizontalConcat(Operator):
     @classmethod
     def input_description(cls):
         return [
-            ('dataset1', Dataset),
-            ('dataset2', Dataset)
+            ('dataset1', Dataset, False),
+            ('dataset2', Dataset, False)
         ]

@@ -46,10 +46,13 @@ class OperatorDialog(QDialog):
         operator_class = self.operators.currentData(role=Qt.UserRole)
 
         input_data = [None for _ in range(len(self.input_data))]
-        for i, (name, (input_widget, data_type)) in enumerate(self.input_data.items()):
-            if data_type == Dataset:
-                input_data[i] = input_widget.currentData(role=Qt.UserRole)
+        input_featuress = [None for _ in range(len(self.input_data))]
+        for i, input_widget in enumerate(self.input_data.values()):
+            dataset = input_widget.get_dataset()
+            input_data[i] = dataset
+            input_featuress[i] = input_widget.get_features()
         input_data = tuple(input_data)
+        input_featuress = tuple(input_featuress)
 
         parameters = {}
         for name, (input_widget, data_type) in self.parameters.items():
@@ -61,7 +64,7 @@ class OperatorDialog(QDialog):
 
         operator = operator_class()
         operator.set_parameters(parameters)
-        operator.set_inputs(input_data)
+        operator.set_inputs(input_data, input_featuress)
 
         self.imp_app.statusBar().showMessage('Performing operation with {}...'.format(operator_class.__name__))
         input_data[0].perform_operation(operator)
@@ -83,21 +86,11 @@ class OperatorDialog(QDialog):
         self.input_data = dict()
         self.clear_layout(self.input_layout)
 
-        for name, data_type in operator_class.input_description():
-            hbox = QHBoxLayout()
-            hbox.addWidget(QLabel(name))
-            combobox = QComboBox()
-            for dataset in self.imp_app.datasets_widget.datasets():
-                combobox.addItem(dataset.name, dataset)
-
-            # Set the clicked dataset as default input for all inputs.
-            idx = combobox.findData(self.dataset)
-            if idx != -1:
-                combobox.setCurrentIndex(idx)
-
-            hbox.addWidget(combobox)
-            self.input_data[name] = combobox, data_type
-            self.input_layout.addLayout(hbox)
+        for name, data_type, select_features in operator_class.input_description():
+            input_dataset_selector = InputDatasetSelector(name, self.imp_app.datasets_widget.datasets(), select_features)
+            input_dataset_selector.select(self.dataset)
+            self.input_layout.addLayout(input_dataset_selector)
+            self.input_data[name] = input_dataset_selector
 
         self.parameters = dict()
         self.clear_layout(self.parameters_layout)
@@ -115,12 +108,46 @@ class OperatorDialog(QDialog):
 
                 hbox.addWidget(input_box)
                 self.parameters[name] = input_box, data_type
-            elif data_type == Dataset:
-                combobox = QComboBox()
-                for dataset in self.imp_app.datasets_widget.datasets():
-                    combobox.addItem(dataset.name, dataset)
-
-                hbox.addWidget(combobox)
-                self.parameters[name] = combobox, data_type
 
             self.parameters_layout.addLayout(hbox)
+
+class InputDatasetSelector(QHBoxLayout):
+
+    def __init__(self, name, datasets, select_features):
+        super().__init__()
+        self.combobox = QComboBox()
+        self.start_feature = QLineEdit()
+        self.end_feature = QLineEdit()
+
+        self.combobox = QComboBox()
+        for dataset in datasets:
+            self.combobox.addItem(dataset.name, dataset)
+
+        self.combobox.currentIndexChanged.connect(self.on_index_change)
+
+        self.addWidget(QLabel(name))
+        self.addWidget(self.combobox)
+        if select_features:
+            self.addWidget(self.start_feature)
+            self.addWidget(self.end_feature)
+
+    def select(self, dataset):
+        # Set the clicked dataset as default input for all inputs.
+        idx = self.combobox.findData(dataset)
+        if idx != -1:
+            self.combobox.setCurrentIndex(idx)
+        self.start_feature.setText(str(0))
+        self.end_feature.setText(str(dataset.m))
+
+    @pyqtSlot(int)
+    def on_index_change(self, index):
+        # Set the clicked dataset as default input for all inputs.
+        dataset = self.combobox.currentData(role=Qt.UserRole)
+        self.start_feature.setText(str(0))
+        self.end_feature.setText(str(dataset.m))
+
+    def get_dataset(self):
+        return self.combobox.currentData(role=Qt.UserRole)
+    
+    def get_features(self):
+        return range(int(self.start_feature.text()), int(self.end_feature.text()))

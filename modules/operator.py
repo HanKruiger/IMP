@@ -15,11 +15,11 @@ class Operator(QThread):
     def input(self):
         return self._input
 
-    def set_input(self, dataset):
-        self._input = (dataset,)
+    def set_input(self, dataset, features):
+        self._input = (tuple(dataset, features),)
 
-    def set_inputs(self, datasets):
-        self._input = tuple(datasets)
+    def set_inputs(self, datasets, featuress):
+        self._input = tuple(zip(tuple(datasets), tuple(featuress)))
 
     def output(self):
         return self._output
