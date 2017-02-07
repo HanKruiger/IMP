@@ -18,7 +18,7 @@ class VisualsWidget(QGroupBox):
 
         pointsize_slider = QSlider(Qt.Horizontal)
         pointsize_slider.setMinimum(1)
-        pointsize_slider.setMaximum(100)
+        pointsize_slider.setMaximum(500)
         pointsize_slider.valueChanged.connect(self.imp_app.gl_widget.set_pointsize)
         pointsize_slider.setValue(8)
         vbox_main.addWidget(QLabel('Point size'))
@@ -98,4 +98,4 @@ class AttributeComboBox(QComboBox):
         if dim == -1:
             self.imp_app.gl_widget.disable_attribute(self.attribute)
         else:
-            self.imp_app.gl_widget.set_attribute(dataset.vbo(dim), dataset.N, 1, self.attribute)
+            self.imp_app.gl_widget.set_attribute(dataset.vbo(dim), dataset.N, 1, self.attribute, dataset, dim)

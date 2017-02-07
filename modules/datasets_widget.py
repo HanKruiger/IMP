@@ -5,7 +5,6 @@ from PyQt5.QtCore import *
 from modules.dataset import DatasetItem
 from modules.dataset import InputDataset
 from modules.operator_dialog import OperatorDialog
-# from modules.clustering_dialog import ClusteringDialog
 
 
 class DatasetsWidget(QGroupBox):

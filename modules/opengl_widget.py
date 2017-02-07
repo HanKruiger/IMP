@@ -2,20 +2,29 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+import numpy as np
+from modules.lense import Lense
 
 class OpenGLWidget(QOpenGLWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        self.setMouseTracking(True)
+
         self.view = QMatrix4x4()
         self.projection = QMatrix4x4()
+        self.pixel = QMatrix4x4()
+
+        self.mouse = QVector2D(0, 0)
+
+        self.lense = Lense(self)
 
         self.attributes = dict()
 
         self.N = 0
 
-    def init_shaders(self, vertex_shader='shaders/vertex.glsl', fragment_shader='shaders/fragment.glsl'):
+    def init_shaders(self, vertex_shader='shaders/points/vertex.glsl', fragment_shader='shaders/points/fragment.glsl'):
         self.shader_program = QOpenGLShaderProgram(self)
 
         # Read shader code from source
@@ -24,6 +33,7 @@ class OpenGLWidget(QOpenGLWidget):
             self.shader_program.addShaderFromSourceCode(QOpenGLShader.Fragment, fs.read())
 
         self.shader_program.link()
+        
 
     def init_vao(self):
         self.vao = QOpenGLVertexArrayObject()
@@ -32,7 +42,7 @@ class OpenGLWidget(QOpenGLWidget):
     def clear(self):
         pass
 
-    def set_attribute(self, vbo, N, m, attribute):
+    def set_attribute(self, vbo, N, m, attribute, dataset, dim):
         # Remove this attribute if it is already set.
         if attribute in self.attributes:
             self.disable_attribute(attribute)
@@ -43,7 +53,7 @@ class OpenGLWidget(QOpenGLWidget):
                 self.disable_attribute(attr)
 
         self.N = N
-        self.attributes[attribute] = {'size': N}
+        self.attributes[attribute] = {'dataset': dataset, 'dim': dim, 'size': N}
 
         self.makeCurrent()
 
@@ -91,12 +101,27 @@ class OpenGLWidget(QOpenGLWidget):
             print('Tried to disable attrubute that was not enabled.')
 
     def zoom(self, factor, pos):
-        p_pixel = QVector3D(pos)
+        p_world = self.pixel_to_world(pos, d=3)
 
-        # Manually transform from pixel coordinates to clip coordinates.
-        p_pixel *= QVector3D(2 / self.width(), 2 / self.height(), 1)
-        p_pixel -= QVector3D(1, 1, 0)
-        p_clip = p_pixel * QVector3D(1, -1, 1)
+        # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
+        self.view.translate((1 - factor) * p_world)
+        self.view.scale(factor)
+
+        self.update()
+
+    def pixel_to_world(self, p_in, d=2):
+        try:
+            scalar = float(p_in)
+            p_pixel = QVector4D(scalar, 0, 0, 0) # w = 0, since we want to transform a distance (no translations!).
+        except TypeError:
+            p_pixel = QVector4D(p_in)
+            if not isinstance(p_in, QVector4D):
+                p_pixel.setW(1) # w = 1, since we assume a vector transformation (yes translations!).
+
+        pixel_i, invertible = self.pixel.inverted()
+        if not invertible:
+            print('Pixel matrix is not invertible.')
+            return
 
         view_i, invertible = self.view.inverted()
         if not invertible:
@@ -108,14 +133,17 @@ class OpenGLWidget(QOpenGLWidget):
             print('Projection matrix is not invertible.')
             return
 
-        # Transform p from clip coordinates, through view coordinates, to world coordinates.
-        p_world = view_i.map(projection_i.map(p_clip))
-
-        # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
-        self.view.translate((1 - factor) * p_world)
-        self.view.scale(factor)
-
-        self.update()
+        p_world = view_i.map(projection_i.map(pixel_i.map(p_pixel)))
+        
+        if d == 4:
+            return p_world
+        elif d == 3:
+            return p_world.toVector3D()
+        elif d == 2:
+            return p_world.toVector2D()
+        elif d == 1:
+            return p_world.length()
+            
 
     def set_pointsize(self, point_size):
         self.point_size = float(point_size)**0.5
@@ -126,9 +154,10 @@ class OpenGLWidget(QOpenGLWidget):
         self.opacity = opacity / 255
         self.update()
 
-    def mousePressEvent(self, mouse_press_event):
-        p = QVector2D(mouse_press_event.pos())
-        p *= QVector2D(1 / self.width(), 1 / self.height())
+    def mouseMoveEvent(self, e):
+        self.mouse = QVector2D(e.pos())
+        # self.mouse.setY(self.height() - self.mouse.y())
+        self.update()
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
@@ -151,6 +180,8 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.init_shaders()
         self.init_vao()
+
+        self.lense.init_gl()
 
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
         gl.glEnable(gl.GL_PROGRAM_POINT_SIZE)
@@ -175,6 +206,9 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.shader_program.release()
 
+        self.lense.draw()
+
+
     def resizeGL(self, w, h):
         # Make new projection matrix to retain aspect ratio
         self.projection.setToIdentity()
@@ -182,6 +216,11 @@ class OpenGLWidget(QOpenGLWidget):
             self.projection.scale(h / w, 1.0)
         else:
             self.projection.scale(1.0, w / h)
+
+        self.pixel.setToIdentity()
+        self.pixel.scale(0.5 * w, 0.5 * h)
+        self.pixel.translate(1, 1)
+        self.pixel.scale(1, -1)
 
         # Define the new viewport (is this even necessary?)
         self.gl.glViewport(0, 0, w, h)

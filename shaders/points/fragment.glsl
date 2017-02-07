@@ -34,6 +34,7 @@ vec3 colormap(float x) {
 
 in float f_color;
 in float f_opacity;
+in vec2 vertex_coordinate;
 out vec4 out_color;
 
 void main() {
@@ -45,5 +46,9 @@ void main() {
 		discard;
 	}
 
-	out_color = vec4(colormap(f_color), f_opacity);
+    /* Smooth transition on the border of the disk */
+    float dist_from_border = 1.0 - radius;
+    float delta_dist_from_border = fwidth(dist_from_border);
+    float alpha = f_opacity * smoothstep(0.0, delta_dist_from_border, dist_from_border);
+	out_color = vec4(colormap(f_color), alpha);
 }

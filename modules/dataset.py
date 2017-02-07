@@ -158,9 +158,8 @@ class InputDataset(Dataset):
         # Tell that we're ready!
         self.data_ready.emit()
 
+
 # Worker class that loads the data in a separate thread
-
-
 class DataLoadWorker(QThread):
 
     def __init__(self, path):

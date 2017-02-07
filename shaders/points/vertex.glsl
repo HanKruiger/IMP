@@ -11,6 +11,7 @@ uniform mat4 projection;
 
 out float f_color;
 out float f_opacity;
+out vec2 vertex_coordinate;
 
 void main() {
 	vec2 position = vec2(position_x, position_y);
