@@ -6,7 +6,7 @@ import abc
 
 import numpy as np
 
-from modules.dataset import Dataset
+from modules.dataset import Dataset, Merging
 from modules.operator import Operator
 
 class HorizontalConcat(Operator):
@@ -28,7 +28,7 @@ class HorizontalConcat(Operator):
 
         print(hidden)
 
-        out_dataset = Dataset(in_dataset_1.name + '_cat', parent=in_dataset_1, relation='hcat', X=Y, hidden=hidden)
+        out_dataset = Merging(in_dataset_1.name(), in_dataset_1, Y, hidden=hidden)
         self.set_output(out_dataset)
 
     @classmethod

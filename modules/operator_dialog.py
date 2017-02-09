@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 from modules.embedders import *
 from modules.clusterers import *
 from modules.linalg_ops import *
+from modules.samplers import *
 
 
 class OperatorDialog(QDialog):
@@ -16,6 +17,8 @@ class OperatorDialog(QDialog):
 
         self.operators = QComboBox()
         self.operators.addItem('PCA', PCAEmbedder)
+        self.operators.addItem('Random sampler', RandomSampler)
+        self.operators.addItem('LAMP', LAMPEmbedder)
         self.operators.addItem('t-SNE', TSNEEmbedder)
         self.operators.addItem('LLE', LLEEmbedder)
         self.operators.addItem('Spectral', SpectralEmbedder)
@@ -125,7 +128,7 @@ class InputDatasetSelector(QHBoxLayout):
 
         self.combobox = QComboBox()
         for dataset in datasets:
-            self.combobox.addItem(dataset.name, dataset)
+            self.combobox.addItem(dataset.name(), dataset)
 
         self.combobox.currentIndexChanged.connect(self.on_index_change)
 

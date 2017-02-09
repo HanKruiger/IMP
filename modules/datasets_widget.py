@@ -22,6 +22,7 @@ class DatasetsWidget(QGroupBox):
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
+        self.tree_view.doubleClicked.connect(self.show_dataset)
 
         # Resize column widths
         for i in range(self.model.columnCount()):
@@ -58,19 +59,30 @@ class DatasetsWidget(QGroupBox):
 
         dataset.set_name(new_name)
 
+    # @pyqtSlot(int) Somehow I cannot decorate this!
+    def show_dataset(self, item):
+        dataset = self.model.data(item, role=Qt.UserRole)
+        if dataset is None:
+            return
+
+        if not self.imp_app.visuals_widget.current_dataset() == dataset:
+            self.imp_app.visuals_widget.update_attribute_list(dataset)
+        else:
+            self.imp_app.visuals_widget.clear_attributes()
+
     @pyqtSlot(object)
     def add_dataset(self, dataset):
         # Connect the dataset's s.t. when it has an embedding, that it adds it here.
         dataset.operation_finished.connect(self.add_dataset)
 
-        dataset_item = DatasetItem(dataset.name)
+        dataset_item = DatasetItem(dataset.name())
         dataset_item.setData(dataset, role=Qt.UserRole)
 
         N_item = QStandardItem(str(dataset.N))
         N_item.setEditable(False)
         m_item = QStandardItem(str(dataset.m))
         m_item.setEditable(False)
-        rel_item = QStandardItem(str(dataset.relation))
+        rel_item = QStandardItem(type(dataset).__name__)
         rel_item.setEditable(False)
 
         if dataset.parent() is None:
@@ -117,20 +129,7 @@ class DatasetsWidget(QGroupBox):
         operator_action = menu.addAction('Perform operation')
         operator_action.triggered.connect(operator_dialog.show)
 
-        if not self.imp_app.visuals_widget.current_dataset() == dataset:
-            add_visual_attribute_action = menu.addAction('Add to visual attributes')
-
-            @pyqtSlot()
-            def add_to_visual_attributes():
-                self.imp_app.visuals_widget.update_attribute_list(dataset)
-            add_visual_attribute_action.triggered.connect(add_to_visual_attributes)
-        else:
-            remove_visual_attribute_action = menu.addAction('Remove from visual attributes')
-
-            @pyqtSlot()
-            def remove_from_visual_attributes():
-                self.imp_app.visuals_widget.clear_attributes()
-            remove_visual_attribute_action.triggered.connect(remove_from_visual_attributes)
+        
 
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')

@@ -60,7 +60,7 @@ class VisualsWidget(QGroupBox):
         self.clear_attributes()
         self._current_dataset = dataset
         for dim in range(dataset.m):
-            item = QStandardItem('{}:{}'.format(dataset.name, dim))
+            item = QStandardItem('{}:{}'.format(dataset.name(), dim))
             item.setData(dim, role=Qt.UserRole)
             self.attribute_datasets_model.appendRow(item)
 

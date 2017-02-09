@@ -11,26 +11,24 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     operation_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent=None, relation='root', X=None, item_data=None, support=None, hidden=[]):
+    def __init__(self, name, parent, X, hidden=[]):
         super().__init__()
-        self.name = name
+        self._name = name
         self._parent = parent
-        self.relation = relation
         self._hidden_features = hidden.copy()
 
-        # Not very elegant. Maybe replace with operator class
-        if relation in ['kmeans', 'mb_kmeans', 'clusterrep']:
-            self._is_clustering = True
-        else:
-            self._is_clustering = False
-
         self._children = []
-        self._item_data = item_data
         self._q_item = None
         self._vbos = dict()
-        self._support = support
+
         if X is not None:
             self.set_data(X)
+
+    def name(self):
+        return self._name
+
+    def set_name(self, name):
+        self._name = name
 
     def destroy(self):
         del self.X
@@ -58,9 +56,6 @@ class Dataset(QObject):
 
     def remove_child(self, child):
         self._children.remove(child)
-
-    def support(self):
-        return self._support
 
     def is_clustering(self):
         return self._is_clustering
@@ -130,14 +125,14 @@ class InputDataset(Dataset):
 
     def __init__(self, path):
         name = os.path.basename(path).split('.')[0]
-        super().__init__(name)
+        super().__init__(name, None, None)
 
         # Load the data in a separate thread, so the GUI doesn't hang.
         # (Doesn't start reading yet. Still needs to be connected from
         # outside.)
         self.worker = DataLoadWorker(path)
-        # Somehow I need this function, and cannot call the method directly...
 
+        # Somehow I need this function, and cannot call the method directly...
         def wrapper():
             self.on_data_loaded()
         self.worker.finished.connect(wrapper)
@@ -192,3 +187,32 @@ class DatasetItem(QStandardItem):
             return self._data
         else:
             return super().data(role)
+
+
+class Clustering(Dataset):
+
+    def __init__(self, name, parent, X, support, hidden=[]):
+        super().__init__(name, parent, X, hidden=hidden)
+        self._support = support
+
+    def support(self):
+        return self._support
+
+
+# Mostly semantics..
+class Embedding(Dataset):
+
+    def __init__(self, name, parent, X, hidden=[]):
+        super().__init__(name, parent, X, hidden=hidden)
+
+
+class Sampling(Dataset):
+
+    def __init__(self, name, parent, X, hidden=[]):
+        super().__init__(name, parent, X, hidden=hidden)
+
+
+class Merging(Dataset):
+
+    def __init__(self, name, parent, X, hidden=[]):
+        super().__init__(name, parent, X, hidden=hidden)

@@ -4,6 +4,8 @@ from PyQt5.QtCore import *
 
 import abc
 
+import numpy as np
+
 from modules.dataset import Dataset
 
 
@@ -51,3 +53,21 @@ class Operator(QThread):
     def input_description(cls):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
+
+    @staticmethod
+    def hide_features(X, hidden_features):
+        n_features = X.shape[1] - len(hidden_features)
+
+        mask = np.ones(X.shape[1], dtype=bool)
+        mask[hidden_features,] = False
+        features = np.arange(X.shape[1])[mask,]
+        del mask
+        assert(len(features) == n_features)
+
+        # Filter out the subset of features that can be used.
+        X_use = X[:, features]
+
+        # Filter out the subset that cannot be used (because hidden!).
+        X_hidden = X[:, hidden_features]
+        
+        return X_use, X_hidden

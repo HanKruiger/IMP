@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import Dataset
+from modules.dataset import Dataset, Embedding
 from modules.operator import Operator
 
 import abc
@@ -37,32 +37,15 @@ class Embedder(Operator):
         in_dataset = self.input()[0][0]
         hidden_features = self.input()[0][1]
 
-        n_hidden_features = len(hidden_features)
-        n_features = in_dataset.m - n_hidden_features
+        X_use, X_hidden = Operator.hide_features(in_dataset.X, hidden_features)
 
-        mask = np.ones(in_dataset.m, dtype=bool)
-        mask[hidden_features,] = False
-        features = np.arange(in_dataset.m)[mask,]
-        del mask
-
-        assert(len(features) == n_features)
-
-        # Filter out the subset of features that are used as input for the embedding
-        X_use = in_dataset.X[:, features]
         # Do the embedding
         Y = self.embed(X_use)
 
-        embed_in_dim = X_use.shape[1]
-        embed_out_dim = Y.shape[1]
-        reduction = embed_in_dim - embed_out_dim
-
-        # Filter out the subset that isn't used
-        X_hidden = in_dataset.X[:, hidden_features]
-        
-        # Concatenate the output of the embedding with the not-considered features
+        # Concatenate the output of the embedding with the hidden features
         Y = np.column_stack([Y, X_hidden])
 
-        out_dataset = Dataset(in_dataset.name + '_emb', parent=in_dataset, relation='emb', X=Y, hidden=np.arange(embed_out_dim, embed_out_dim + n_hidden_features))
+        out_dataset = Embedding(in_dataset.name() + '_emb', in_dataset, Y, hidden=np.arange(Y.shape[1] - len(hidden_features), Y.shape[1]))
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -190,3 +173,53 @@ class IsomapEmbedder(Embedder):
             'n_components': (int, 2),
             'n_neighbors': (int, 5)
         }
+
+class LAMPEmbedder(Embedder):
+
+    def __init__(self):
+        super().__init__()
+
+    def embed(self, X):
+        representatives_dataset = self.input()[1][0]
+        representatives_hidden_features = self.input()[1][1]
+
+        Y_s, _ = Operator.hide_features(representatives_dataset.X, representatives_hidden_features)
+        X_s, _ = Operator.hide_features(representatives_dataset.parent().X, representatives_dataset.parent().hidden_features())
+
+        print(Y_s.shape)
+        print(X_s.shape)
+
+        N = X.shape[0]
+        n = Y_s.shape[1]
+
+        Y = np.zeros((N, n))
+
+        for i in np.arange(N):
+            x = X[i, :]
+            
+            alphas = np.sum((X_s - x)**2, axis=1)
+            
+            x_tilde = (alphas * X_s.T).sum(axis=1) / alphas.sum()
+            y_tilde = (alphas * Y_s.T).sum(axis=1) / alphas.sum()
+            
+            A_T = alphas * (X_s - x_tilde).T
+            B = (alphas * (Y_s - y_tilde).T).T
+
+            U, _, V = np.linalg.svd(A_T.dot(B), full_matrices=False)
+
+            Y[i, :] = (x - x_tilde).dot(U.dot(V)) + y_tilde
+
+        return Y
+
+    @classmethod
+    def input_description(cls):
+        """Method that should run parameters needed for the operator,
+        along with their types and default values. """
+        return {
+            'dataset': (Dataset, True),
+            'representatives': (Dataset, True)
+        }
+
+    @classmethod
+    def parameters_description(cls):
+        return {}

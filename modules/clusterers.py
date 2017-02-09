@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import Dataset
+from modules.dataset import Dataset, Clustering
 from modules.operator import Operator
 
 import abc
@@ -30,18 +30,8 @@ class Clusterer(Operator):
         in_dataset = self.input()[0][0]
         hidden_features = self.input()[0][1]
 
-        n_hidden_features = len(hidden_features)
-        n_features = in_dataset.m - n_hidden_features
+        X_use, X_hidden = Operator.hide_features(in_dataset.X, hidden_features)
 
-        mask = np.ones(in_dataset.m, dtype=bool)
-        mask[hidden_features,] = False
-        features = np.arange(in_dataset.m)[mask,]
-        del mask
-
-        assert(len(features) == n_features)
-
-        # Filter out the non-hidden features that are used as input for the clustering
-        X_use = in_dataset.X[:, features]
         # Do the clustering
         Y, X_labels = self.cluster(X_use)
 
@@ -50,15 +40,14 @@ class Clusterer(Operator):
         support = self.find_support(X_labels, n_clusters)
 
         # Assign averaged values (over the support) to the representatives' hidden features
-        X_hidden = in_dataset.X[:, hidden_features]
-        Y_hidden = np.zeros((n_clusters, n_hidden_features))
+        Y_hidden = np.zeros((n_clusters, len(hidden_features)))
         for i in range(n_clusters):
             Y_hidden[i, :] = X_hidden[support[i], :].mean(axis=0)
-        
+
         # Concatenate the output of the clustering with the averaged hidden features
         Y = np.column_stack([Y, Y_hidden])
 
-        out_dataset = Dataset(in_dataset.name + '_clus', parent=in_dataset, relation='clus', X=Y, support=support, hidden=hidden_features)
+        out_dataset = Clustering(in_dataset.name() + '_clus', in_dataset, Y, support, hidden=hidden_features)
         self.set_output(out_dataset)
 
     @abc.abstractmethod

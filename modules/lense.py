@@ -62,7 +62,7 @@ class Lense:
 
     def draw(self):
         p_world = self.world_coordinates()
-        print('x:{} y:{} r:{}'.format(p_world.x(), p_world.y(), self.world_radius()))
+        # print('x:{} y:{} r:{}'.format(p_world.x(), p_world.y(), self.world_radius()))
         self.shader_program.bind()
         self.shader_program.setUniformValue('u_radius', self.radius)
         self.shader_program.setUniformValue('u_center', self.gl_widget.mouse)
