@@ -26,8 +26,6 @@ class HorizontalConcat(Operator):
         if self.parameters()['add_as_hidden']:
             hidden.extend(range(in_dataset_1.m, in_dataset_1.m + in_dataset_2.m))
 
-        print(hidden)
-
         out_dataset = Merging(in_dataset_1.name(), in_dataset_1, Y, hidden=hidden)
         self.set_output(out_dataset)
 

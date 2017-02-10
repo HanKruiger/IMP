@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+from collections import OrderedDict
+import time
 from modules.dataset import Dataset
 
 import numpy as np
@@ -32,11 +34,10 @@ class VisualsWidget(QGroupBox):
         vbox_main.addWidget(QLabel('Opacity'))
         vbox_main.addWidget(opacity_slider)
 
-        self.attributes = {
-            'position_x': AttributeComboBox('position_x', self, self.imp_app),
-            'position_y': AttributeComboBox('position_y', self, self.imp_app),
-            'color': AttributeComboBox('color', self, self.imp_app)
-        }
+        self.attributes = OrderedDict()
+        self.attributes['position_x'] = AttributeComboBox('position_x', self, self.imp_app)
+        self.attributes['position_y'] = AttributeComboBox('position_y', self, self.imp_app)
+        self.attributes['color'] = AttributeComboBox('color', self, self.imp_app)
 
         self.attribute_datasets_model = QStandardItemModel()
         empty_item = QStandardItem('Pick one')
@@ -59,10 +60,16 @@ class VisualsWidget(QGroupBox):
     def update_attribute_list(self, dataset):
         self.clear_attributes()
         self._current_dataset = dataset
+
         for dim in range(dataset.m):
             item = QStandardItem('{}:{}'.format(dataset.name(), dim))
             item.setData(dim, role=Qt.UserRole)
             self.attribute_datasets_model.appendRow(item)
+
+        for i, acb in enumerate(self.attributes.values()):
+            if i >= dataset.m:
+                break
+            acb.setCurrentIndex(i + 1) # Skip the empty entry.
 
     def current_dataset(self):
         return self._current_dataset
@@ -95,7 +102,9 @@ class AttributeComboBox(QComboBox):
         dim = item.data(role=Qt.UserRole)
         dataset = self.v_widget.current_dataset()
 
+        self.imp_app.gl_widget.makeCurrent()
         if dim == -1:
             self.imp_app.gl_widget.disable_attribute(self.attribute)
         else:
-            self.imp_app.gl_widget.set_attribute(dataset.vbo(dim), dataset.N, 1, self.attribute, dataset, dim)
+            self.imp_app.gl_widget.set_attribute(dataset, dim, dataset.N, 1, self.attribute)
+        self.imp_app.gl_widget.doneCurrent()

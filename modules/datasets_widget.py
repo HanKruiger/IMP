@@ -68,6 +68,7 @@ class DatasetsWidget(QGroupBox):
         if not self.imp_app.visuals_widget.current_dataset() == dataset:
             self.imp_app.visuals_widget.update_attribute_list(dataset)
         else:
+            print('hello')
             self.imp_app.visuals_widget.clear_attributes()
 
     @pyqtSlot(object)

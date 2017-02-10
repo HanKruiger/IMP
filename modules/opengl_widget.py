@@ -42,10 +42,11 @@ class OpenGLWidget(QOpenGLWidget):
     def clear(self):
         pass
 
-    def set_attribute(self, vbo, N, m, attribute, dataset, dim):
+    def set_attribute(self, dataset, dim, N, m, attribute):
         # Remove this attribute if it is already set.
         if attribute in self.attributes:
             self.disable_attribute(attribute)
+
 
         # Loop over attributes and remove the ones incompatible with N
         for attr, descr in self.attributes.copy().items():
@@ -56,6 +57,9 @@ class OpenGLWidget(QOpenGLWidget):
         self.attributes[attribute] = {'dataset': dataset, 'dim': dim, 'size': N}
 
         self.makeCurrent()
+
+        # Get the VBO from the dataset (will be generated if it doesn't exist)
+        vbo = dataset.vbo(dim)
 
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
