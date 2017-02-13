@@ -17,11 +17,8 @@ class Operator(QThread):
     def input(self):
         return self._input
 
-    def set_input(self, dataset, hidden_features):
-        self._input = (tuple(dataset, hidden_features),)
-
-    def set_inputs(self, datasets, hidden_featuress):
-        self._input = tuple(zip(tuple(datasets), tuple(hidden_featuress)))
+    def set_input(self, inputs):
+        self._input = inputs
 
     def output(self):
         return self._output

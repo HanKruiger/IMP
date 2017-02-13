@@ -34,8 +34,8 @@ class Embedder(Operator):
         return Y_cpy
 
     def run(self):
-        in_dataset = self.input()[0][0]
-        hidden_features = self.input()[0][1]
+        in_dataset = self.input()['parent']
+        hidden_features = self.parameters()['hidden_features']
 
         X_use, X_hidden = Operator.hide_features(in_dataset.X, hidden_features)
 
@@ -45,7 +45,7 @@ class Embedder(Operator):
         # Concatenate the output of the embedding with the hidden features
         Y = np.column_stack([Y, X_hidden])
 
-        out_dataset = Embedding(in_dataset.name() + '_emb', in_dataset, Y, hidden=np.arange(Y.shape[1] - len(hidden_features), Y.shape[1]))
+        out_dataset = Embedding(in_dataset.name() + 'e', in_dataset, Y, hidden=np.arange(Y.shape[1] - len(hidden_features), Y.shape[1]))
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -57,8 +57,15 @@ class Embedder(Operator):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
         return {
-            'dataset': (Dataset, True)
+            'parent': Dataset
         }
+
+    @classmethod
+    def parameters_description(cls):
+        return {
+            'hidden_features': (list, None)
+        }
+
 
 class PCAEmbedder(Embedder):
 
@@ -66,16 +73,20 @@ class PCAEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        pca = PCA(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        pca = PCA(**parameters)
         Y = pca.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2)
-        }
+        })
+        return desc
 
 
 class TSNEEmbedder(Embedder):
@@ -84,18 +95,22 @@ class TSNEEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        tsne = TSNE(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        tsne = TSNE(**parameters)
         Y = tsne.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2),
             'perplexity': (float, 30.0),
             'n_iter': (int, 200)
-        }
+        })
+        return desc
 
 
 class LLEEmbedder(Embedder):
@@ -104,17 +119,21 @@ class LLEEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        lle = LocallyLinearEmbedding(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        lle = LocallyLinearEmbedding(**parameters)
         Y = lle.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2),
             'n_neighbors': (int, 5)
-        }
+        })
+        return desc
 
 
 class SpectralEmbedder(Embedder):
@@ -123,17 +142,21 @@ class SpectralEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        se = SpectralEmbedding(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        se = SpectralEmbedding(**parameters)
         Y = se.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2),
             'n_neighbors': (int, 5)
-        }
+        })
+        return desc
 
 
 class MDSEmbedder(Embedder):
@@ -142,18 +165,22 @@ class MDSEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        mds = MDS(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        mds = MDS(**parameters)
         Y = mds.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2),
             'max_iter': (int, 300),
             'metric': (int, 1)
-        }
+        })
+        return desc
 
 
 class IsomapEmbedder(Embedder):
@@ -162,17 +189,21 @@ class IsomapEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        isomap = Isomap(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        isomap = Isomap(**parameters)
         Y = isomap.fit_transform(X)
         Y = self.normalize(Y)
         return Y
 
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_components': (int, 2),
             'n_neighbors': (int, 5)
-        }
+        })
+        return desc
 
 class LAMPEmbedder(Embedder):
 
@@ -180,14 +211,11 @@ class LAMPEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        representatives_dataset = self.input()[1][0]
-        representatives_hidden_features = self.input()[1][1]
+        representatives_dataset = self.input()['representatives'][0]
+        representatives_hidden_features = self.input()['representatives'][1]
 
         Y_s, _ = Operator.hide_features(representatives_dataset.X, representatives_hidden_features)
         X_s, _ = Operator.hide_features(representatives_dataset.parent().X, representatives_dataset.parent().hidden_features())
-
-        print(Y_s.shape)
-        print(X_s.shape)
 
         N = X.shape[0]
         n = Y_s.shape[1]
@@ -216,10 +244,7 @@ class LAMPEmbedder(Embedder):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
         return {
-            'dataset': (Dataset, True),
-            'representatives': (Dataset, True)
+            'parent': Dataset,
+            'representatives': Dataset
         }
 
-    @classmethod
-    def parameters_description(cls):
-        return {}

@@ -27,8 +27,8 @@ class Clusterer(Operator):
         return support
 
     def run(self):
-        in_dataset = self.input()[0][0]
-        hidden_features = self.input()[0][1]
+        in_dataset = self.input()['parent']
+        hidden_features = self.parameters()['hidden_features']
 
         X_use, X_hidden = Operator.hide_features(in_dataset.X, hidden_features)
 
@@ -47,11 +47,11 @@ class Clusterer(Operator):
         # Concatenate the output of the clustering with the averaged hidden features
         Y = np.column_stack([Y, Y_hidden])
 
-        out_dataset = Clustering(in_dataset.name() + '_clus', in_dataset, Y, support, hidden=hidden_features)
+        out_dataset = Clustering(in_dataset.name() + 'c', in_dataset, Y, support, hidden=hidden_features)
         self.set_output(out_dataset)
 
     @abc.abstractmethod
-    def embed(self, X):
+    def cluster(self, X):
         """Method that should do the clustering"""
 
     @classmethod
@@ -59,7 +59,13 @@ class Clusterer(Operator):
         """Method that should run parameters needed for the operator,
         along with their types and default values. """
         return {
-            'dataset': (Dataset, True)
+            'parent': Dataset
+        }
+
+    @classmethod
+    def parameters_description(cls):
+        return {
+            'hidden_features': (list, None)
         }
 
 
@@ -69,7 +75,9 @@ class KMeansClusterer(Clusterer):
         super().__init__()
 
     def cluster(self, X):
-        kmeans = KMeans(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        kmeans = KMeans(**parameters)
         kmeans.fit(X)
 
         return kmeans.cluster_centers_, kmeans.labels_
@@ -77,10 +85,12 @@ class KMeansClusterer(Clusterer):
     
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_clusters': (int, 1000),
             'n_jobs': (int, 1)
-        }
+        })
+        return desc
 
 class MiniBatchKMeansClusterer(Clusterer):
 
@@ -88,7 +98,9 @@ class MiniBatchKMeansClusterer(Clusterer):
         super().__init__()
 
     def cluster(self, X):
-        mbkmeans = MiniBatchKMeans(**self.parameters())
+        parameters = self.parameters().copy()
+        del parameters['hidden_features']
+        mbkmeans = MiniBatchKMeans(**parameters)
         mbkmeans.fit(X)
 
         return mbkmeans.cluster_centers_, mbkmeans.labels_
@@ -96,9 +108,11 @@ class MiniBatchKMeansClusterer(Clusterer):
     
     @classmethod
     def parameters_description(cls):
-        return {
+        desc = super().parameters_description()
+        desc.update({
             'n_clusters': (int, 1000),
             'batch_size': (int, 1000),
             'max_iter': (int, 100),
             'reassignment_ratio': (int, 0.01)
-        }
+        })
+        return desc

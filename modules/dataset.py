@@ -96,9 +96,11 @@ class Dataset(QObject):
         except KeyError:
             return self.make_vbo(dim)
 
-    def make_vbo(self, dim):
+    def make_vbo(self, dim, normalize=False):
         X_32 = np.array(self.X[:, dim], dtype=np.float32)
-        X_32 /= X_32.max()  # Normalize for now.
+        
+        if normalize:
+            X_32 /= X_32.max()
 
         self._vbos[dim] = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
         self._vbos[dim].create()
@@ -108,6 +110,13 @@ class Dataset(QObject):
         self._vbos[dim].release()
         return self._vbos[dim]
 
+    def normalized_vbo(self, dim):
+        try:
+            self.destroy_vbo(dim)
+        except KeyError:
+            pass
+        return self.make_vbo(dim, normalize=True)
+
     def destroy_vbos(self):
         for dim, vbo in self._vbos.copy().items():
             vbo.destroy()
@@ -116,54 +125,6 @@ class Dataset(QObject):
     def destroy_vbo(self, dim):
         self._vbos[dim].destroy()
         del self._vbos[dim]
-
-
-class InputDataset(Dataset):
-
-    # Emitted when input data is loaded
-    data_ready = pyqtSignal()
-
-    def __init__(self, path):
-        name = os.path.basename(path).split('.')[0]
-        super().__init__(name, None, None)
-
-        # Load the data in a separate thread, so the GUI doesn't hang.
-        # (Doesn't start reading yet. Still needs to be connected from
-        # outside.)
-        self.worker = DataLoadWorker(path)
-
-        # Somehow I need this function, and cannot call the method directly...
-        def wrapper():
-            self.on_data_loaded()
-        self.worker.finished.connect(wrapper)
-
-    def load_data(self):
-        # Start the thread (calls the run() method in the other thread)
-        self.worker.start()
-
-    @pyqtSlot()
-    def on_data_loaded(self):
-        # Fetch data from worker, and delete it
-        X = self.worker.data
-        del self.worker  # Your services are no longer needed.
-
-        # Set the data.
-        super().set_data(X)
-
-        # Tell that we're ready!
-        self.data_ready.emit()
-
-
-# Worker class that loads the data in a separate thread
-class DataLoadWorker(QThread):
-
-    def __init__(self, path):
-        super().__init__()
-        self.path = path
-
-    def run(self):
-        # Make numpy load the data
-        self.data = np.loadtxt(self.path)
 
 
 class DatasetItem(QStandardItem):
@@ -188,6 +149,14 @@ class DatasetItem(QStandardItem):
         else:
             return super().data(role)
 
+# Mostly semantics..
+
+
+class InputDataset(Dataset):
+
+    def __init__(self, name, X, hidden=[]):
+        super().__init__(name, None, X, hidden=hidden)
+
 
 class Clustering(Dataset):
 
@@ -199,7 +168,6 @@ class Clustering(Dataset):
         return self._support
 
 
-# Mostly semantics..
 class Embedding(Dataset):
 
     def __init__(self, name, parent, X, hidden=[]):
@@ -211,6 +179,10 @@ class Sampling(Dataset):
     def __init__(self, name, parent, X, hidden=[]):
         super().__init__(name, parent, X, hidden=hidden)
 
+class Selection(Dataset):
+
+    def __init__(self, name, parent, X, hidden=[]):
+        super().__init__(name, parent, X, hidden=hidden)
 
 class Merging(Dataset):
 

@@ -15,8 +15,8 @@ class HorizontalConcat(Operator):
         super().__init__()
 
     def run(self):
-        in_dataset_1 = self.input()[0][0]
-        in_dataset_2 = self.input()[1][0]
+        in_dataset_1 = self.input()['parent']
+        in_dataset_2 = self.input()['source']
 
         assert(in_dataset_1.N == in_dataset_2.N)
         
@@ -38,6 +38,6 @@ class HorizontalConcat(Operator):
     @classmethod
     def input_description(cls):
         return {
-            'dataset1': (Dataset, False),
-            'dataset2': (Dataset, False)
+            'parent': (Dataset, False),
+            'source': (Dataset, False)
         }

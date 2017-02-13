@@ -8,7 +8,7 @@ class Lense:
 
     def __init__(self, gl_widget):
         self.gl_widget = gl_widget
-        self.radius = 150.0
+        self.radius = 100.0
 
     def init_gl(self):
         self.gl = self.gl_widget.gl

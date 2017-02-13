@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import DatasetItem
-from modules.dataset import InputDataset
+from modules.dataset import DatasetItem, InputDataset, Selection
+from modules.readers import Reader
 from modules.operator_dialog import OperatorDialog
 
 
@@ -68,7 +68,6 @@ class DatasetsWidget(QGroupBox):
         if not self.imp_app.visuals_widget.current_dataset() == dataset:
             self.imp_app.visuals_widget.update_attribute_list(dataset)
         else:
-            print('hello')
             self.imp_app.visuals_widget.clear_attributes()
 
     @pyqtSlot(object)
@@ -104,6 +103,9 @@ class DatasetsWidget(QGroupBox):
             self.tree_view.resizeColumnToContents(i)
 
         self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
+
+        if type(dataset) == Selection:
+            self.imp_app.visuals_widget.update_attribute_list(dataset)
 
     def remove_dataset(self, dataset):
         if dataset == self.imp_app.visuals_widget.current_dataset():
@@ -160,14 +162,17 @@ class DatasetsWidget(QGroupBox):
 
     def dropEvent(self, drop_event):
         urls = drop_event.mimeData().urls()
-        for url in urls:
-            input_dataset = InputDataset(url.path())
+        paths = [url.path() for url in urls]
 
-            @pyqtSlot()
-            def callback():
-                self.imp_app.statusBar().clearMessage()
-                self.add_dataset(input_dataset)
+        reader = Reader()
+        reader.set_parameters({'paths': paths})
 
-            input_dataset.data_ready.connect(callback)
-            self.imp_app.statusBar().showMessage('Loading {0}...'.format(url.fileName()))
-            input_dataset.load_data()
+        @pyqtSlot()
+        def callback():
+            self.imp_app.statusBar().clearMessage()
+            for dataset in reader.output():
+                self.add_dataset(dataset)
+        
+        reader.finished.connect(callback)
+        self.imp_app.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
+        reader.start()

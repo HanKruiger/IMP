@@ -48,18 +48,17 @@ class OperatorDialog(QDialog):
     def run_and_close(self):
         operator_class = self.operators.currentData(role=Qt.UserRole)
 
-        input_data = [None for _ in range(len(self.input_data))]
-        input_hidden_features = [None for _ in range(len(self.input_data))]
-        for i, input_widget in enumerate(self.input_data.values()):
-            dataset = input_widget.get_dataset()
-            input_data[i] = dataset
-            input_hidden_features[i] = input_widget.hidden_features()
-        input_data = tuple(input_data)
-        input_hidden_features = tuple(input_hidden_features)
+        inputs = {}
+        for name, input_widget in self.input_form.items():
+            inputs[name] = input_widget.value()
 
         parameters = {}
-        for name, (input_widget, data_type) in self.parameters.items():
-            if data_type == int or data_type == float:
+        for name, (input_widget, data_type) in self.parameter_form.items():
+                # def hidden_features(self):
+            if name == 'hidden_features':
+                input_text = input_widget.text()
+                parameters[name] = [int(feature) for feature in input_text.split(',') if feature != '']
+            elif data_type == int or data_type == float:
                 if input_widget.hasAcceptableInput():
                     parameters[name] = data_type(input_widget.text())
             elif data_type == bool:
@@ -67,10 +66,10 @@ class OperatorDialog(QDialog):
 
         operator = operator_class()
         operator.set_parameters(parameters)
-        operator.set_inputs(input_data, input_hidden_features)
+        operator.set_input(inputs)
 
         self.imp_app.statusBar().showMessage('Performing operation with {}...'.format(operator_class.__name__))
-        input_data[0].perform_operation(operator)
+        inputs['parent'].perform_operation(operator)
         self.done(0)
 
     def clear_layout(self, layout):
@@ -86,74 +85,67 @@ class OperatorDialog(QDialog):
     def build_ui(self, index=0):
         operator_class = self.operators.currentData(role=Qt.UserRole)
 
-        self.input_data = dict()
+        self.input_form = dict()
         self.clear_layout(self.input_layout)
 
-        for name, (data_type, select_features) in operator_class.input_description().items():
-            input_dataset_selector = InputDatasetSelector(name, self.imp_app.datasets_widget.datasets(), select_features)
+        for name, description in operator_class.input_description().items():
+            input_dataset_selector = InputDatasetSelector(name, self.imp_app.datasets_widget.datasets())
             input_dataset_selector.select(self.dataset)
             self.input_layout.addLayout(input_dataset_selector)
-            self.input_data[name] = input_dataset_selector
+            self.input_form[name] = input_dataset_selector
+                
 
-        self.parameters = dict()
+        self.parameter_form = dict()
         self.clear_layout(self.parameters_layout)
 
         for name, (data_type, default) in operator_class.parameters_description().items():
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel(name))
-            if data_type == float or data_type == int:
-                input_box = QLineEdit()
+            if name == 'hidden_features':
+                hf_text_box = QLineEdit()
+                def set_default_hidden_features():
+                    dataset = self.input_form['parent'].value()
+                    hf_text_box.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
+                set_default_hidden_features()
+                self.input_form['parent'].combobox.currentIndexChanged.connect(set_default_hidden_features)
+                hbox.addWidget(hf_text_box)
+                self.parameter_form[name] = hf_text_box, data_type
+            elif data_type == float or data_type == int:
+                text_box = QLineEdit()
                 if data_type == float:
-                    input_box.setValidator(QDoubleValidator())
+                    text_box.setValidator(QDoubleValidator())
                 elif data_type == int:
-                    input_box.setValidator(QIntValidator())
-                input_box.setText(str(default))
+                    text_box.setValidator(QIntValidator())
+                text_box.setText(str(default))
 
-                hbox.addWidget(input_box)
-                self.parameters[name] = input_box, data_type
+                hbox.addWidget(text_box)
+                self.parameter_form[name] = text_box, data_type
             elif data_type == bool:
                 check_box = QCheckBox(name)
                 check_box.setChecked(default)
                 hbox.addWidget(check_box)
-                self.parameters[name] = check_box, data_type
+                self.parameter_form[name] = check_box, data_type
 
             self.parameters_layout.addLayout(hbox)
 
 class InputDatasetSelector(QHBoxLayout):
 
-    def __init__(self, name, datasets, select_features):
+    def __init__(self, name, datasets):
         super().__init__()
         self.combobox = QComboBox()
-        self.hidden_features_edit = QLineEdit()
 
-        self.combobox = QComboBox()
         for dataset in datasets:
             self.combobox.addItem(dataset.name(), dataset)
 
-        self.combobox.currentIndexChanged.connect(self.on_index_change)
-
         self.addWidget(QLabel(name))
         self.addWidget(self.combobox)
-        if select_features:
-            self.addWidget(QLabel('Hidden features'))
-            self.addWidget(self.hidden_features_edit)
 
     def select(self, dataset):
         # Set the clicked dataset as initial input choice
         idx = self.combobox.findData(dataset)
         if idx != -1:
             self.combobox.setCurrentIndex(idx)
-        self.hidden_features_edit.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
 
-    @pyqtSlot(int)
-    def on_index_change(self, index):
+    def value(self):
         dataset = self.combobox.currentData(role=Qt.UserRole)
-        self.hidden_features_edit.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
-
-    def get_dataset(self):
-        return self.combobox.currentData(role=Qt.UserRole)
-    
-    def hidden_features(self):
-        input_text = self.hidden_features_edit.text()
-        hidden_features = [int(feature) for feature in input_text.split(',') if feature != '']
-        return hidden_features
+        return dataset

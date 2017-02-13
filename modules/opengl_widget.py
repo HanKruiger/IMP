@@ -3,7 +3,9 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
+from modules.dataset import Embedding
 from modules.lense import Lense
+from modules.selectors import LenseSelector
 
 class OpenGLWidget(QOpenGLWidget):
 
@@ -56,10 +58,18 @@ class OpenGLWidget(QOpenGLWidget):
         self.N = N
         self.attributes[attribute] = {'dataset': dataset, 'dim': dim, 'size': N}
 
+        if attribute == 'color':
+            normalize = True
+        else:
+            normalize = False
+
         self.makeCurrent()
 
         # Get the VBO from the dataset (will be generated if it doesn't exist)
-        vbo = dataset.vbo(dim)
+        if not normalize:
+            vbo = dataset.vbo(dim)
+        else:
+            vbo = dataset.normalized_vbo(dim)
 
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
@@ -160,7 +170,34 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mouseMoveEvent(self, e):
         self.mouse = QVector2D(e.pos())
-        # self.mouse.setY(self.height() - self.mouse.y())
+        self.update()
+
+    def mousePressEvent(self, e):
+        self.mouse = QVector2D(e.pos())
+       
+        p_world = self.lense.world_coordinates()
+        r_world = self.lense.world_radius()
+
+        dataset = self.attributes['position_x']['dataset']
+        parent = dataset
+
+        # We want to select in 'embedding', but make the selection results in the nD parent.
+        while type(parent) == Embedding:
+            parent = parent.parent()
+
+        selector = LenseSelector()
+        selector.set_input({
+            'embedding': dataset,
+            'parent': parent
+        })
+        selector.set_parameters({
+            'lense': self.lense,
+            'x_dim': self.attributes['position_x']['dim'],
+            'y_dim': self.attributes['position_y']['dim']
+        })
+
+        parent.perform_operation(selector)
+
         self.update()
 
     def wheelEvent(self, wheel_event):

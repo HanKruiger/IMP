@@ -15,7 +15,7 @@ class RandomSampler(Operator):
         super().__init__()
 
     def run(self):
-        in_dataset = self.input()[0][0]
+        in_dataset = self.input()['parent']
 
         X = in_dataset.X
 
@@ -24,7 +24,7 @@ class RandomSampler(Operator):
         idcs = np.random.choice(N, k, replace=False)
         Y = X[idcs, :]
         
-        out_dataset = Sampling(in_dataset.name(), parent=in_dataset, X=Y, hidden=in_dataset.hidden_features())
+        out_dataset = Sampling(in_dataset.name() + 's', parent=in_dataset, X=Y, hidden=in_dataset.hidden_features())
         self.set_output(out_dataset)
 
     @classmethod
@@ -36,5 +36,5 @@ class RandomSampler(Operator):
     @classmethod
     def input_description(cls):
         return {
-            'dataset': (Dataset, False),
+            'parent': Dataset
         }
