@@ -28,15 +28,16 @@ class Reader(Operator):
 
         self.set_outputs(out_datasets)
 
-    @abc.abstractmethod
     def read(self, path):
+        hidden_features = []
         if path.endswith('.nd') or path.endswith('.2d'):
             try:
-                return self.read_nd(path)
+                X, hidden_features = self.read_nd(path)
             except:
                 pass # Hope that numpy will read it..
-        Y = np.loadtxt(path)
-        return Y, []
+        X = np.loadtxt(path)
+
+        return X, hidden_features
 
     def read_nd(self, path):
         with open(path) as f:

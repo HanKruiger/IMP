@@ -100,6 +100,7 @@ class Dataset(QObject):
         X_32 = np.array(self.X[:, dim], dtype=np.float32)
         
         if normalize:
+            X_32 -= X_32.min()
             X_32 /= X_32.max()
 
         self._vbos[dim] = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)

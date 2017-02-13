@@ -22,7 +22,7 @@ class VisualsWidget(QGroupBox):
         pointsize_slider.setMinimum(1)
         pointsize_slider.setMaximum(500)
         pointsize_slider.valueChanged.connect(self.imp_app.gl_widget.set_pointsize)
-        pointsize_slider.setValue(8)
+        pointsize_slider.setValue(16)
         vbox_main.addWidget(QLabel('Point size'))
         vbox_main.addWidget(pointsize_slider)
 
@@ -30,7 +30,7 @@ class VisualsWidget(QGroupBox):
         opacity_slider.setMinimum(0)
         opacity_slider.setMaximum(255)
         opacity_slider.valueChanged.connect(self.imp_app.gl_widget.set_opacity)
-        opacity_slider.setValue(25)
+        opacity_slider.setValue(128)
         vbox_main.addWidget(QLabel('Opacity'))
         vbox_main.addWidget(opacity_slider)
 

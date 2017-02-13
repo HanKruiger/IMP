@@ -15,6 +15,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.setMouseTracking(True)
 
         self.view = QMatrix4x4()
+        self.view.scale(0.25, 0.25)
         self.projection = QMatrix4x4()
         self.pixel = QMatrix4x4()
 
