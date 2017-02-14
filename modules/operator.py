@@ -52,19 +52,13 @@ class Operator(QThread):
         along with their types and default values. """
 
     @staticmethod
-    def hide_features(X, hidden_features):
-        n_features = X.shape[1] - len(hidden_features)
-
-        mask = np.ones(X.shape[1], dtype=bool)
-        mask[hidden_features,] = False
-        features = np.arange(X.shape[1])[mask,]
-        del mask
-        assert(len(features) == n_features)
+    def hide_features(X, n_hidden_features):
+        n_features = X.shape[1] - n_hidden_features
 
         # Filter out the subset of features that can be used.
-        X_use = X[:, features]
+        X_use = X[:, :n_features]
 
         # Filter out the subset that cannot be used (because hidden!).
-        X_hidden = X[:, hidden_features]
+        X_hidden = X[:, -n_hidden_features:]
         
         return X_use, X_hidden

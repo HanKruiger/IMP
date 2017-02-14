@@ -28,9 +28,9 @@ class Clusterer(Operator):
 
     def run(self):
         in_dataset = self.input()['parent']
-        hidden_features = self.parameters()['hidden_features']
+        n_hidden_features = self.parameters()['n_hidden_features']
 
-        X_use, X_hidden = Operator.hide_features(in_dataset.X, hidden_features)
+        X_use, X_hidden = Operator.hide_features(in_dataset.X, n_hidden_features)
 
         # Do the clustering
         Y, X_labels = self.cluster(X_use)
@@ -40,14 +40,14 @@ class Clusterer(Operator):
         support = self.find_support(X_labels, n_clusters)
 
         # Assign averaged values (over the support) to the representatives' hidden features
-        Y_hidden = np.zeros((n_clusters, len(hidden_features)))
+        Y_hidden = np.zeros((n_clusters, n_hidden_features))
         for i in range(n_clusters):
             Y_hidden[i, :] = X_hidden[support[i], :].mean(axis=0)
 
         # Concatenate the output of the clustering with the averaged hidden features
         Y = np.column_stack([Y, Y_hidden])
 
-        out_dataset = Clustering(in_dataset.name() + 'c', in_dataset, Y, support, hidden=hidden_features)
+        out_dataset = Clustering(in_dataset.name() + 'c', in_dataset, Y, support, hidden=n_hidden_features)
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -65,7 +65,7 @@ class Clusterer(Operator):
     @classmethod
     def parameters_description(cls):
         return {
-            'hidden_features': (list, None)
+            'n_hidden_features': (int, None)
         }
 
 
@@ -76,7 +76,7 @@ class KMeansClusterer(Clusterer):
 
     def cluster(self, X):
         parameters = self.parameters().copy()
-        del parameters['hidden_features']
+        del parameters['n_hidden_features']
         kmeans = KMeans(**parameters)
         kmeans.fit(X)
 
@@ -99,7 +99,7 @@ class MiniBatchKMeansClusterer(Clusterer):
 
     def cluster(self, X):
         parameters = self.parameters().copy()
-        del parameters['hidden_features']
+        del parameters['n_hidden_features']
         mbkmeans = MiniBatchKMeans(**parameters)
         mbkmeans.fit(X)
 

@@ -54,11 +54,7 @@ class OperatorDialog(QDialog):
 
         parameters = {}
         for name, (input_widget, data_type) in self.parameter_form.items():
-                # def hidden_features(self):
-            if name == 'hidden_features':
-                input_text = input_widget.text()
-                parameters[name] = [int(feature) for feature in input_text.split(',') if feature != '']
-            elif data_type == int or data_type == float:
+            if data_type == int or data_type == float:
                 if input_widget.hasAcceptableInput():
                     parameters[name] = data_type(input_widget.text())
             elif data_type == bool:
@@ -101,22 +97,22 @@ class OperatorDialog(QDialog):
         for name, (data_type, default) in operator_class.parameters_description().items():
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel(name))
-            if name == 'hidden_features':
-                hf_text_box = QLineEdit()
-                def set_default_hidden_features():
-                    dataset = self.input_form['parent'].value()
-                    hf_text_box.setText(', '.join([str(hidden_feature) for hidden_feature in dataset.hidden_features()]))
-                set_default_hidden_features()
-                self.input_form['parent'].combobox.currentIndexChanged.connect(set_default_hidden_features)
-                hbox.addWidget(hf_text_box)
-                self.parameter_form[name] = hf_text_box, data_type
-            elif data_type == float or data_type == int:
+            if data_type == float or data_type == int:
                 text_box = QLineEdit()
+                
                 if data_type == float:
                     text_box.setValidator(QDoubleValidator())
                 elif data_type == int:
                     text_box.setValidator(QIntValidator())
-                text_box.setText(str(default))
+                
+                if name == 'n_hidden_features':
+                    def set_default_hidden_features():
+                        dataset = self.input_form['parent'].value()
+                        text_box.setText(str(dataset.hidden_features()))
+                    set_default_hidden_features()
+                    self.input_form['parent'].combobox.currentIndexChanged.connect(set_default_hidden_features)
+                else:
+                    text_box.setText(str(default))
 
                 hbox.addWidget(text_box)
                 self.parameter_form[name] = text_box, data_type

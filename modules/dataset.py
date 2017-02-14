@@ -15,7 +15,7 @@ class Dataset(QObject):
         super().__init__()
         self._name = name
         self._parent = parent
-        self._hidden_features = hidden.copy()
+        self._n_hidden_features = hidden
 
         self._children = []
         self._q_item = None
@@ -69,7 +69,7 @@ class Dataset(QObject):
             self.m = X.shape[1]
 
     def hidden_features(self):
-        return self._hidden_features
+        return self._n_hidden_features
 
     def perform_operation(self, operator):
         self.embedding_worker = operator
