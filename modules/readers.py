@@ -33,6 +33,7 @@ class Reader(Operator):
         if path.endswith('.nd') or path.endswith('.2d'):
             try:
                 X, hidden_features = self.read_nd(path)
+                return X, hidden_features
             except:
                 pass # Hope that numpy will read it..
         X = np.loadtxt(path)
@@ -75,6 +76,9 @@ class Reader(Operator):
             except StopIteration:
                 pass
 
+            # Normalize the hidden features (labels) between 0 and 1.
+            X[:, hidden_features] /= X[:, hidden_features].max(axis=0)
+            
             return X, hidden_features
 
     def set_input(self):

@@ -2,7 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import DatasetItem, InputDataset, Selection
+from modules.dataset import DatasetItem, InputDataset, Selection, Embedding
+from modules.selectors import LenseSelector
 from modules.readers import Reader
 from modules.operator_dialog import OperatorDialog
 
@@ -52,6 +53,31 @@ class DatasetsWidget(QGroupBox):
             add_to_set(dataset_item, datasets)
 
         return datasets
+
+    @pyqtSlot(object)
+    def fetch_nd_roi(self, dataset):
+        print('Also triggering this slot for dataset {}'.format(dataset.name()))
+        self.imp_app.gl_widget.update()
+
+    def hierarchical_zoom(self, dataset, lense, x_dim, y_dim):
+        # We want to select in 'embedding', but make the selection results in the nD parent.
+        parent = dataset
+        while type(parent) == Embedding:
+            parent = parent.parent()
+
+        selector = LenseSelector()
+        selector.set_input({
+            'embedding': dataset,
+            'parent': parent
+        })
+        selector.set_parameters({
+            'lense': lense,
+            'x_dim': x_dim,
+            'y_dim': y_dim
+        })
+
+        parent.operation_finished.connect(self.fetch_nd_roi)
+        parent.perform_operation(selector)
 
     def data_changed(self, topleft, bottomright, roles):
         dataset = self.model.data(topleft, role=Qt.UserRole)
@@ -103,9 +129,6 @@ class DatasetsWidget(QGroupBox):
             self.tree_view.resizeColumnToContents(i)
 
         self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
-
-        if type(dataset) == Selection:
-            self.imp_app.visuals_widget.update_attribute_list(dataset)
 
     def remove_dataset(self, dataset):
         if dataset == self.imp_app.visuals_widget.current_dataset():

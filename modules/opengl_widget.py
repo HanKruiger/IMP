@@ -9,9 +9,9 @@ from modules.selectors import LenseSelector
 
 class OpenGLWidget(QOpenGLWidget):
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
+    def __init__(self, imp_app):
+        super().__init__()
+        self.imp_app = imp_app
         self.setMouseTracking(True)
 
         self.view = QMatrix4x4()
@@ -59,10 +59,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.N = N
         self.attributes[attribute] = {'dataset': dataset, 'dim': dim, 'size': N}
 
-        if attribute == 'color':
-            normalize = True
-        else:
-            normalize = False
+        normalize = False
 
         self.makeCurrent()
 
@@ -180,26 +177,12 @@ class OpenGLWidget(QOpenGLWidget):
         r_world = self.lense.world_radius()
 
         dataset = self.attributes['position_x']['dataset']
-        parent = dataset
-
-        # We want to select in 'embedding', but make the selection results in the nD parent.
-        while type(parent) == Embedding:
-            parent = parent.parent()
-
-        selector = LenseSelector()
-        selector.set_input({
-            'embedding': dataset,
-            'parent': parent
-        })
-        selector.set_parameters({
-            'lense': self.lense,
-            'x_dim': self.attributes['position_x']['dim'],
-            'y_dim': self.attributes['position_y']['dim']
-        })
-
-        parent.perform_operation(selector)
-
-        self.update()
+        self.imp_app.datasets_widget.hierarchical_zoom(
+            dataset,
+            self.lense,
+            self.attributes['position_x']['dim'],
+            self.attributes['position_y']['dim']
+        )
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:

@@ -11,7 +11,7 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     operation_finished = pyqtSignal(object)
 
-    def __init__(self, name, parent, X, hidden=[]):
+    def __init__(self, name, parent, X, hidden=0):
         super().__init__()
         self._name = name
         self._parent = parent

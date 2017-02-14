@@ -22,7 +22,7 @@ class HorizontalConcat(Operator):
         
         Y = np.column_stack([in_dataset_1.X, in_dataset_2.X])
         
-        hidden = 0
+        hidden = in_dataset_1.hidden_features()
         if self.parameters()['add_as_hidden']:
             hidden += in_dataset_2.m
 
