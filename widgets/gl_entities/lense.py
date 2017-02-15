@@ -72,7 +72,8 @@ class Lense:
         self.shader_program.release()
 
     def world_coordinates(self):
-        return self.gl_widget.pixel_to_world(self.gl_widget.mouse)
+        p = self.gl_widget.pixel_to_world(self.gl_widget.mouse)
+        return np.array([p.x(), p.y()])
 
     def world_radius(self):
         return abs(self.gl_widget.pixel_to_world(self.radius, d=1))

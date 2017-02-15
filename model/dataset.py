@@ -9,7 +9,7 @@ import numpy as np
 class Dataset(QObject):
 
     # Emitted when (child) embedding is finished
-    operation_finished = pyqtSignal(object)
+    operation_finished = pyqtSignal(object, object)
 
     def __init__(self, name, parent, X, hidden=0):
         super().__init__()
@@ -17,6 +17,7 @@ class Dataset(QObject):
         self._parent = parent
         self._n_hidden_features = hidden
 
+        self._workers = set()
         self._children = []
         self._q_item = None
         self._vbos = dict()
@@ -72,23 +73,27 @@ class Dataset(QObject):
         return self._n_hidden_features
 
     def perform_operation(self, operator):
-        self.embedding_worker = operator
-        operator.finished.connect(self.operator_finished)
-        operator.start()
+        # Somehow I need this local function...
+        def handle_results(op):
+            self.handle_operator_results(op)
+        operator.has_results.connect(handle_results)
 
-    @pyqtSlot()
-    def operator_finished(self):
+        operator.start()
+        self._workers.add(operator)
+
+    @pyqtSlot(object)
+    def handle_operator_results(self, operator):
         # Fetch data from worker, and delete it
-        result = self.embedding_worker.output()
-        del self.embedding_worker  # Your services are no longer needed.
+        result = operator.output()
+        self._workers.remove(operator)  # Your services are no longer needed.
 
         if type(result) == tuple:
             for child in result:
-                self.append_child(child)
-                self.operation_finished.emit(child)
+                child.parent().append_child(child)
         else:
-            self.append_child(result)
-            self.operation_finished.emit(result)
+            result.parent().append_child(result)
+        
+        self.operation_finished.emit(result, operator)
 
     def vbo(self, dim):
         try:
@@ -153,13 +158,13 @@ class DatasetItem(QStandardItem):
 
 class InputDataset(Dataset):
 
-    def __init__(self, name, X, hidden=[]):
+    def __init__(self, name, X, hidden=0):
         super().__init__(name, None, X, hidden=hidden)
 
 
 class Clustering(Dataset):
 
-    def __init__(self, name, parent, X, support, hidden=[]):
+    def __init__(self, name, parent, X, support, hidden=0):
         super().__init__(name, parent, X, hidden=hidden)
         self._support = support
 
@@ -169,13 +174,18 @@ class Clustering(Dataset):
 
 class Embedding(Dataset):
 
-    def __init__(self, name, parent, X, hidden=[]):
+    def __init__(self, name, parent, X, hidden=0):
+        super().__init__(name, parent, X, hidden=hidden)
+
+class InverseProjection(Dataset):
+
+    def __init__(self, name, parent, X, hidden=0):
         super().__init__(name, parent, X, hidden=hidden)
 
 
 class Selection(Dataset):
 
-    def __init__(self, name, parent, idcs, hidden=[]):
+    def __init__(self, name, parent, idcs, hidden=0):
         self._idcs = idcs
         self.m = parent.m
         self.N = len(idcs)
@@ -184,14 +194,25 @@ class Selection(Dataset):
     def data(self):
         return self.parent().data()[self._idcs, :]
 
+    def destroy(self):
+        del self._idcs
+        if self._parent is not None:
+            self._parent.remove_child(self)
+        self.destroy_vbos()
+
 
 class Sampling(Selection):
 
-    def __init__(self, name, parent, idcs, hidden=[]):
+    def __init__(self, name, parent, idcs, hidden=0):
         super().__init__(name, parent, idcs, hidden=hidden)
 
+    def set_support(self, support):
+        self._support = support
+
+    def support(self):
+        return self._support
 
 class Merging(Dataset):
 
-    def __init__(self, name, parent, X, hidden=[]):
+    def __init__(self, name, parent, X, hidden=0):
         super().__init__(name, parent, X, hidden=hidden)

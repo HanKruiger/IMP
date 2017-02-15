@@ -9,10 +9,13 @@ import numpy as np
 from model.dataset import Dataset
 
 
-class Operator(QThread):
+class Operator(QThread, QObject):
+
+    has_results = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
+        self.finished.connect(self.notify_caller)
 
     def input(self):
         return self._input
@@ -34,6 +37,9 @@ class Operator(QThread):
 
     def set_parameters(self, parameters):
         self._parameters = parameters
+
+    def notify_caller(self):
+        self.has_results.emit(self)
 
     @abc.abstractmethod
     def run(self):

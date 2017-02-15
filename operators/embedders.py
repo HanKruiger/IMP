@@ -205,6 +205,7 @@ class IsomapEmbedder(Embedder):
         })
         return desc
 
+
 class LAMPEmbedder(Embedder):
 
     def __init__(self):
@@ -223,12 +224,12 @@ class LAMPEmbedder(Embedder):
 
         for i in np.arange(N):
             x = X[i, :]
-            
+
             alphas = np.sum((X_s - x)**2, axis=1)
-            
+
             x_tilde = (alphas * X_s.T).sum(axis=1) / alphas.sum()
             y_tilde = (alphas * Y_s.T).sum(axis=1) / alphas.sum()
-            
+
             A_T = alphas * (X_s - x_tilde).T
             B = (alphas * (Y_s - y_tilde).T).T
 
@@ -246,4 +247,3 @@ class LAMPEmbedder(Embedder):
             'parent': Dataset,
             'representatives': Dataset
         }
-

@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 import numpy as np
 from widgets.gl_entities.lense import Lense
 from operators.selectors import LenseSelector
+from model.dataset import Embedding
 
 class OpenGLWidget(QOpenGLWidget):
 
@@ -172,16 +173,11 @@ class OpenGLWidget(QOpenGLWidget):
     def mousePressEvent(self, e):
         self.mouse = QVector2D(e.pos())
        
-        p_world = self.lense.world_coordinates()
-        r_world = self.lense.world_radius()
-
+        center = self.lense.world_coordinates()
+        radius = self.lense.world_radius()
         dataset = self.attributes['position_x']['dataset']
-        self.imp_app.datasets_widget.hierarchical_zoom(
-            dataset,
-            self.lense,
-            self.attributes['position_x']['dim'],
-            self.attributes['position_y']['dim']
-        )
+        self.imp_app.datasets_widget.hierarchical_zoom(dataset, self.attributes['position_x']['dim'], self.attributes['position_y']['dim'], center, radius)
+        
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:

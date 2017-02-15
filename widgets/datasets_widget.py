@@ -2,9 +2,10 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from model.dataset import DatasetItem, InputDataset, Selection, Embedding
+from model.dataset import DatasetItem, InputDataset, Selection, Embedding, Dataset
 from operators.selectors import LenseSelector
 from operators.readers import Reader
+from operators.operator_chains import HierarchicalZoom
 from widgets.operator_dialog import OperatorDialog
 
 
@@ -18,12 +19,13 @@ class DatasetsWidget(QGroupBox):
         self.model.setHorizontalHeaderLabels(['Name', 'N', 'm', 'rel'])
         self.model.dataChanged.connect(self.data_changed)
 
-
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
         self.tree_view.doubleClicked.connect(self.show_dataset)
+
+        self._workers = set()
 
         # Resize column widths
         for i in range(self.model.columnCount()):
@@ -34,6 +36,27 @@ class DatasetsWidget(QGroupBox):
         self.setLayout(self.vbox_main)
 
         self.setAcceptDrops(True)
+
+    def hierarchical_zoom(self, dataset, x_dim, y_dim, center, radius):
+        parent = dataset
+        while type(parent) == Embedding:
+            parent = parent.parent()
+
+
+        hierchical_zoom = HierarchicalZoom()
+        hierchical_zoom.set_input({
+            'parent': parent,
+            'selected': dataset
+        })
+        hierchical_zoom.set_parameters({
+            'center': center,
+            'radius': radius,
+            'x_dim': x_dim,
+            'y_dim': y_dim
+        })
+        self.rememberme = hierchical_zoom
+        hierchical_zoom.initialize()
+        hierchical_zoom.run()
 
     def datasets(self):
         datasets = set()
@@ -54,31 +77,6 @@ class DatasetsWidget(QGroupBox):
 
         return datasets
 
-    @pyqtSlot(object)
-    def fetch_nd_roi(self, dataset):
-        print('Also triggering this slot for dataset {}'.format(dataset.name()))
-        self.imp_app.gl_widget.update()
-
-    def hierarchical_zoom(self, dataset, lense, x_dim, y_dim):
-        # We want to select in 'embedding', but make the selection results in the nD parent.
-        parent = dataset
-        while type(parent) == Embedding:
-            parent = parent.parent()
-
-        selector = LenseSelector()
-        selector.set_input({
-            'embedding': dataset,
-            'parent': parent
-        })
-        selector.set_parameters({
-            'lense': lense,
-            'x_dim': x_dim,
-            'y_dim': y_dim
-        })
-
-        parent.operation_finished.connect(self.fetch_nd_roi)
-        parent.perform_operation(selector)
-
     def data_changed(self, topleft, bottomright, roles):
         dataset = self.model.data(topleft, role=Qt.UserRole)
         new_name = self.model.data(topleft, role=Qt.DisplayRole)
@@ -97,7 +95,18 @@ class DatasetsWidget(QGroupBox):
             self.imp_app.visuals_widget.clear_attributes()
 
     @pyqtSlot(object)
-    def add_dataset(self, dataset):
+    def handle_reader_results(self, reader):
+        self.imp_app.statusBar().clearMessage()
+        for dataset in reader.output():
+            self.add_dataset(dataset)
+        self._workers.remove(reader)
+
+    @pyqtSlot(object)
+    def add_dataset(self, dataset, operator=None):
+        if not isinstance(dataset, Dataset):
+            for d in dataset:
+                self.add_dataset(d, operator)
+            return
         # Connect the dataset's s.t. when it has an embedding, that it adds it here.
         dataset.operation_finished.connect(self.add_dataset)
 
@@ -155,8 +164,6 @@ class DatasetsWidget(QGroupBox):
         operator_action = menu.addAction('Perform operation')
         operator_action.triggered.connect(operator_dialog.show)
 
-        
-
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')
 
@@ -189,13 +196,9 @@ class DatasetsWidget(QGroupBox):
 
         reader = Reader()
         reader.set_parameters({'paths': paths})
-
-        @pyqtSlot()
-        def callback():
-            self.imp_app.statusBar().clearMessage()
-            for dataset in reader.output():
-                self.add_dataset(dataset)
-        
-        reader.finished.connect(callback)
-        self.imp_app.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
+        reader.has_results.connect(self.handle_reader_results)
         reader.start()
+
+        self.imp_app.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
+        self._workers.add(reader)
+
