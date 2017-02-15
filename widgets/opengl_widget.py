@@ -3,9 +3,8 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
-from modules.dataset import Embedding
-from modules.lense import Lense
-from modules.selectors import LenseSelector
+from widgets.gl_entities.lense import Lense
+from operators.selectors import LenseSelector
 
 class OpenGLWidget(QOpenGLWidget):
 

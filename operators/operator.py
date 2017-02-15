@@ -6,7 +6,7 @@ import abc
 
 import numpy as np
 
-from modules.dataset import Dataset
+from model.dataset import Dataset
 
 
 class Operator(QThread):

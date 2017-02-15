@@ -22,7 +22,12 @@ class Dataset(QObject):
         self._vbos = dict()
 
         if X is not None:
-            self.set_data(X)
+            self._X = X
+            self.N = X.shape[0]
+            if len(X.shape) < 2:
+                self.m = 1
+            else:
+                self.m = X.shape[1]
 
     def name(self):
         return self._name
@@ -31,7 +36,7 @@ class Dataset(QObject):
         self._name = name
 
     def destroy(self):
-        del self.X
+        del self._X
         if self._parent is not None:
             self._parent.remove_child(self)
         self.destroy_vbos()
@@ -60,13 +65,8 @@ class Dataset(QObject):
     def is_clustering(self):
         return self._is_clustering
 
-    def set_data(self, X):
-        self.X = X
-        self.N = X.shape[0]
-        if len(X.shape) < 2:
-            self.m = 1
-        else:
-            self.m = X.shape[1]
+    def data(self):
+        return self._X
 
     def hidden_features(self):
         return self._n_hidden_features
@@ -97,8 +97,8 @@ class Dataset(QObject):
             return self.make_vbo(dim)
 
     def make_vbo(self, dim, normalize=False):
-        X_32 = np.array(self.X[:, dim], dtype=np.float32)
-        
+        X_32 = np.array(self.data()[:, dim], dtype=np.float32)
+
         if normalize:
             X_32 -= X_32.min()
             X_32 /= X_32.max()
@@ -150,8 +150,6 @@ class DatasetItem(QStandardItem):
         else:
             return super().data(role)
 
-# Mostly semantics..
-
 
 class InputDataset(Dataset):
 
@@ -175,15 +173,23 @@ class Embedding(Dataset):
         super().__init__(name, parent, X, hidden=hidden)
 
 
-class Sampling(Dataset):
-
-    def __init__(self, name, parent, X, hidden=[]):
-        super().__init__(name, parent, X, hidden=hidden)
-
 class Selection(Dataset):
 
-    def __init__(self, name, parent, X, hidden=[]):
-        super().__init__(name, parent, X, hidden=hidden)
+    def __init__(self, name, parent, idcs, hidden=[]):
+        self._idcs = idcs
+        self.m = parent.m
+        self.N = len(idcs)
+        super().__init__(name, parent, None, hidden=hidden)
+
+    def data(self):
+        return self.parent().data()[self._idcs, :]
+
+
+class Sampling(Selection):
+
+    def __init__(self, name, parent, idcs, hidden=[]):
+        super().__init__(name, parent, idcs, hidden=hidden)
+
 
 class Merging(Dataset):
 

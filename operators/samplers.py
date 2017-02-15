@@ -6,8 +6,8 @@ import abc
 
 import numpy as np
 
-from modules.dataset import Dataset, Sampling
-from modules.operator import Operator
+from model.dataset import Dataset, Sampling
+from operators.operator import Operator
 
 class RandomSampler(Operator):
 
@@ -17,14 +17,14 @@ class RandomSampler(Operator):
     def run(self):
         in_dataset = self.input()['parent']
 
-        X = in_dataset.X
+        X = in_dataset.data()
 
         N = X.shape[0]
         k = self.parameters()['k']
         idcs = np.random.choice(N, k, replace=False)
         Y = X[idcs, :]
         
-        out_dataset = Sampling(in_dataset.name() + 's', parent=in_dataset, X=Y, hidden=in_dataset.hidden_features())
+        out_dataset = Sampling('S({})'.format(in_dataset.name()), parent=in_dataset, idcs=idcs, hidden=in_dataset.hidden_features())
         self.set_output(out_dataset)
 
     @classmethod

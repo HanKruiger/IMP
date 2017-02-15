@@ -4,13 +4,9 @@ from PyQt5.QtCore import *
 
 import numpy as np
 
-from modules.opengl_widget import OpenGLWidget
-from modules.datasets_widget import DatasetsWidget
-from modules.visuals_widget import VisualsWidget
-from modules.dataset import Dataset
-from modules.dataset import DatasetItem
-from modules.dataset import InputDataset
-from modules.embedders import PCAEmbedder
+from widgets.opengl_widget import OpenGLWidget
+from widgets.datasets_widget import DatasetsWidget
+from widgets.visuals_widget import VisualsWidget
 
 
 class ImpApp(QMainWindow):

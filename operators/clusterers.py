@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import Dataset, Clustering
-from modules.operator import Operator
+from model.dataset import Dataset, Clustering
+from operators.operator import Operator
 
 import abc
 import os
@@ -30,7 +30,7 @@ class Clusterer(Operator):
         in_dataset = self.input()['parent']
         n_hidden_features = self.parameters()['n_hidden_features']
 
-        X_use, X_hidden = Operator.hide_features(in_dataset.X, n_hidden_features)
+        X_use, X_hidden = Operator.hide_features(in_dataset.data(), n_hidden_features)
 
         # Do the clustering
         Y, X_labels = self.cluster(X_use)

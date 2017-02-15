@@ -2,10 +2,10 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.embedders import *
-from modules.clusterers import *
-from modules.linalg_ops import *
-from modules.samplers import *
+from operators.embedders import *
+from operators.clusterers import *
+from operators.linalg_ops import *
+from operators.samplers import *
 
 
 class OperatorDialog(QDialog):

@@ -6,9 +6,9 @@ import abc
 
 import numpy as np
 
-from modules.lense import Lense
-from modules.dataset import Dataset, Selection, Embedding
-from modules.operator import Operator
+from widgets.gl_entities.lense import Lense
+from model.dataset import Dataset, Selection, Embedding
+from operators.operator import Operator
 
 class LenseSelector(Operator):
 
@@ -22,7 +22,7 @@ class LenseSelector(Operator):
         in_dataset = self.input()['embedding']
         parent = self.input()['parent']
 
-        X = in_dataset.X
+        X = in_dataset.data()
 
         x = X[:, self.parameters()['x_dim']]
         y = X[:, self.parameters()['y_dim']]
@@ -35,7 +35,7 @@ class LenseSelector(Operator):
 
         idcs = np.linalg.norm(Y - p, axis=1) <= radius
         
-        X_filtered = parent.X[idcs, :]
+        X_filtered = parent.data()[idcs, :]
 
         out_dataset = Selection(parent.name() + 's', parent=parent, X=X_filtered, hidden=parent.hidden_features())
         self.set_output(out_dataset)

@@ -2,10 +2,10 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import DatasetItem, InputDataset, Selection, Embedding
-from modules.selectors import LenseSelector
-from modules.readers import Reader
-from modules.operator_dialog import OperatorDialog
+from model.dataset import DatasetItem, InputDataset, Selection, Embedding
+from operators.selectors import LenseSelector
+from operators.readers import Reader
+from widgets.operator_dialog import OperatorDialog
 
 
 class DatasetsWidget(QGroupBox):

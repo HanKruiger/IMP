@@ -6,8 +6,8 @@ import abc
 
 import numpy as np
 
-from modules.dataset import Dataset, Merging
-from modules.operator import Operator
+from model.dataset import Dataset, Merging
+from operators.operator import Operator
 
 class HorizontalConcat(Operator):
 
@@ -20,7 +20,7 @@ class HorizontalConcat(Operator):
 
         assert(in_dataset_1.N == in_dataset_2.N)
         
-        Y = np.column_stack([in_dataset_1.X, in_dataset_2.X])
+        Y = np.column_stack([in_dataset_1.data(), in_dataset_2.data()])
         
         hidden = in_dataset_1.hidden_features()
         if self.parameters()['add_as_hidden']:

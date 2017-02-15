@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import Dataset, Embedding
-from modules.operator import Operator
+from model.dataset import Dataset, Embedding
+from operators.operator import Operator
 
 import abc
 import os
@@ -37,7 +37,7 @@ class Embedder(Operator):
         in_dataset = self.input()['parent']
         n_hidden_features = self.parameters()['n_hidden_features']
 
-        X_use, X_hidden = Operator.hide_features(in_dataset.X, n_hidden_features)
+        X_use, X_hidden = Operator.hide_features(in_dataset.data(), n_hidden_features)
 
         # Do the embedding
         Y = self.embed(X_use)
@@ -45,7 +45,7 @@ class Embedder(Operator):
         # Concatenate the output of the embedding with the hidden features
         Y = np.column_stack([Y, X_hidden])
 
-        out_dataset = Embedding(in_dataset.name() + 'e', in_dataset, Y, hidden=n_hidden_features)
+        out_dataset = Embedding('E({})'.format(in_dataset.name()), in_dataset, Y, hidden=n_hidden_features)
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -213,8 +213,8 @@ class LAMPEmbedder(Embedder):
     def embed(self, X):
         representatives_dataset = self.input()['representatives']
 
-        Y_s, _ = Operator.hide_features(representatives_dataset.X, self.parameters()['n_hidden_features'])
-        X_s, _ = Operator.hide_features(representatives_dataset.parent().X, self.parameters()['n_hidden_features'])
+        Y_s, _ = Operator.hide_features(representatives_dataset.data(), self.parameters()['n_hidden_features'])
+        X_s, _ = Operator.hide_features(representatives_dataset.parent().data(), self.parameters()['n_hidden_features'])
 
         N = X.shape[0]
         n = Y_s.shape[1]

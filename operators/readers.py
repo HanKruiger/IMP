@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from modules.dataset import Dataset, InputDataset
-from modules.operator import Operator
+from model.dataset import Dataset, InputDataset
+from operators.operator import Operator
 
 import abc
 import os
