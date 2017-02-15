@@ -42,14 +42,13 @@ class HierarchicalZoom(QObject):
         # Unsubscribe from further events on dataset
         self.input()['parent'].operation_finished.disconnect(self.step_1)
 
-        root_dataset = self.input()['parent']
-        while root_dataset.parent() is not None and not isinstance(root_dataset, Merging):
-            root_dataset = root_dataset.parent()
-        print(root_dataset)
+        self.root_dataset = self.input()['parent']
+        while self.root_dataset.parent() is not None and not isinstance(self.root_dataset, Merging):
+            self.root_dataset = self.root_dataset.parent()
 
         self.inverse_projector = InverseProjector()
         self.inverse_projector.set_input({
-            'nd_dataset': root_dataset,
+            'nd_dataset': self.root_dataset,
             'query_nd': query_nd,
             'query_2d': query_2d
         })
@@ -58,8 +57,8 @@ class HierarchicalZoom(QObject):
             'radius': self.parameters()['radius']    
         })
 
-        root_dataset.operation_finished.connect(self.step_2)
-        root_dataset.perform_operation(self.inverse_projector)
+        self.root_dataset.operation_finished.connect(self.step_2)
+        self.root_dataset.perform_operation(self.inverse_projector)
         
 
     @pyqtSlot(object, object)
@@ -68,7 +67,7 @@ class HierarchicalZoom(QObject):
             return # This was not the operator I was waiting for.
 
         # Unsubscribe from further events on dataset
-        root_dataset.operation_finished.disconnect(self.step_2)
+        self.root_dataset.operation_finished.disconnect(self.step_2)
 
         print('In step 2')
 

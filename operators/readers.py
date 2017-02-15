@@ -37,6 +37,10 @@ class Reader(Operator):
             except:
                 pass # Hope that numpy will read it..
         X = np.loadtxt(path)
+        
+        # Normalize single-dimensional datasets (these are often, if not always, labels)
+        if X.ndim == 1:
+            X /= X.max()
 
         return X, hidden_features
 
