@@ -77,7 +77,6 @@ class PCAEmbedder(Embedder):
         del parameters['n_hidden_features']
         pca = PCA(**parameters)
         Y = pca.fit_transform(X)
-        # Y = self.normalize(Y)
         return Y
 
     @classmethod
@@ -99,7 +98,6 @@ class TSNEEmbedder(Embedder):
         del parameters['n_hidden_features']
         tsne = TSNE(**parameters)
         Y = tsne.fit_transform(X)
-        Y = self.normalize(Y)
         return Y
 
     @classmethod
@@ -123,7 +121,6 @@ class LLEEmbedder(Embedder):
         del parameters['n_hidden_features']
         lle = LocallyLinearEmbedding(**parameters)
         Y = lle.fit_transform(X)
-        Y = self.normalize(Y)
         return Y
 
     @classmethod
@@ -146,7 +143,6 @@ class SpectralEmbedder(Embedder):
         del parameters['n_hidden_features']
         se = SpectralEmbedding(**parameters)
         Y = se.fit_transform(X)
-        Y = self.normalize(Y)
         return Y
 
     @classmethod
@@ -169,7 +165,6 @@ class MDSEmbedder(Embedder):
         del parameters['n_hidden_features']
         mds = MDS(**parameters)
         Y = mds.fit_transform(X)
-        Y = self.normalize(Y)
         return Y
 
     @classmethod
@@ -193,7 +188,6 @@ class IsomapEmbedder(Embedder):
         del parameters['n_hidden_features']
         isomap = Isomap(**parameters)
         Y = isomap.fit_transform(X)
-        Y = self.normalize(Y)
         return Y
 
     @classmethod

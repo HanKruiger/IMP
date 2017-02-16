@@ -18,6 +18,7 @@ class OperatorDialog(QDialog):
         self.operators = QComboBox()
         self.operators.addItem('PCA', PCAEmbedder)
         self.operators.addItem('Random sampler', RandomSampler)
+        self.operators.addItem('DBSCAN', DBSCANClusterer)
         self.operators.addItem('LAMP', LAMPEmbedder)
         self.operators.addItem('t-SNE', TSNEEmbedder)
         self.operators.addItem('LLE', LLEEmbedder)
@@ -54,7 +55,7 @@ class OperatorDialog(QDialog):
 
         parameters = {}
         for name, (input_widget, data_type) in self.parameter_form.items():
-            if data_type == int or data_type == float:
+            if data_type == int or data_type == float or data_type == str:
                 if input_widget.hasAcceptableInput():
                     parameters[name] = data_type(input_widget.text())
             elif data_type == bool:
@@ -97,7 +98,7 @@ class OperatorDialog(QDialog):
         for name, (data_type, default) in operator_class.parameters_description().items():
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel(name))
-            if data_type == float or data_type == int:
+            if data_type == float or data_type == int or data_type == str:
                 text_box = QLineEdit()
                 
                 if data_type == float:

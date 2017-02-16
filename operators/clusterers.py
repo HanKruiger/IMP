@@ -8,7 +8,7 @@ from operators.operator import Operator
 import abc
 import os
 import numpy as np
-from sklearn.cluster import KMeans, MiniBatchKMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans, DBSCAN
 
 
 class Clusterer(Operator):
@@ -47,7 +47,7 @@ class Clusterer(Operator):
         # Concatenate the output of the clustering with the averaged hidden features
         Y = np.column_stack([Y, Y_hidden])
 
-        out_dataset = Clustering(in_dataset.name() + 'c', in_dataset, Y, support, hidden=n_hidden_features)
+        out_dataset = Clustering('C({})'.format(in_dataset.name()), in_dataset, Y, support, hidden=n_hidden_features)
         self.set_output(out_dataset)
 
     @abc.abstractmethod
@@ -88,7 +88,8 @@ class KMeansClusterer(Clusterer):
         desc = super().parameters_description()
         desc.update({
             'n_clusters': (int, 1000),
-            'n_jobs': (int, 1)
+            'n_jobs': (int, 1),
+            'init': (str, 'k-means++')
         })
         return desc
 
@@ -114,5 +115,39 @@ class MiniBatchKMeansClusterer(Clusterer):
             'batch_size': (int, 1000),
             'max_iter': (int, 100),
             'reassignment_ratio': (int, 0.01)
+        })
+        return desc
+
+# According to my terminology, this is a sampler, not a clusterer...
+class DBSCANClusterer(Clusterer):
+
+    def __init__(self):
+        super().__init__()
+
+    def cluster(self, X):
+        parameters = self.parameters().copy()
+        del parameters['n_hidden_features']
+        
+        dbscan = DBSCAN(**parameters)
+        labels = dbscan.fit_predict(X)
+        
+        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        
+        # Take average of items in the cluster
+        centroids = np.zeros((n_clusters, X.shape[1]))
+        for i in range(n_clusters):
+            centroids[i, :] = X[labels == i, :].mean(axis=0)
+
+        return centroids, labels
+
+    @classmethod
+    def parameters_description(cls):
+        desc = super().parameters_description()
+        desc.update({
+            'eps': (float, 0.5),
+            'min_samples': (int, 5),
+            'metric': (str, 'euclidean'),
+            'algorithm': (str, 'auto'),
+            'leaf_size': (int, 30)
         })
         return desc
