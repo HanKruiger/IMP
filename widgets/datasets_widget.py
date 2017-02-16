@@ -30,9 +30,17 @@ class DatasetsWidget(QGroupBox):
         # Resize column widths
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
+        
+        N_max_hbox = QHBoxLayout()
+        self.N_max_textbox = QLineEdit()
+        self.N_max_textbox.setValidator(QIntValidator())
+        self.N_max_textbox.setText(str(1000))
+        N_max_hbox.addWidget(QLabel('N_max'))
+        N_max_hbox.addWidget(self.N_max_textbox)
 
         self.vbox_main = QVBoxLayout()
         self.vbox_main.addWidget(self.tree_view)
+        self.vbox_main.addLayout(N_max_hbox)
         self.setLayout(self.vbox_main)
 
         self.setAcceptDrops(True)
@@ -42,7 +50,13 @@ class DatasetsWidget(QGroupBox):
         while type(parent) == Embedding:
             parent = parent.parent()
 
-        hierchical_zoom = HierarchicalZoom(parent, dataset, center, radius, x_dim, y_dim)
+        if self.N_max_textbox.hasAcceptableInput():
+            N_max = int(self.N_max_textbox.text())
+        else:
+            print('Invalid input. Setting N_max = 1000')
+            N_max = 1000
+
+        hierchical_zoom = HierarchicalZoom(parent, dataset, center, radius, x_dim, y_dim, N_max)
         hierchical_zoom.when_done.connect(self.show_dataset)
         hierchical_zoom.run()
         self._workers.add(hierchical_zoom)

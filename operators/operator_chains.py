@@ -17,8 +17,9 @@ class HierarchicalZoom(QObject):
 
     when_done = pyqtSignal(object, object)
 
-    def __init__(self, parent, selected, center, radius, x_dim, y_dim):
+    def __init__(self, parent, selected, center, radius, x_dim, y_dim, N_max):
         super().__init__()
+        self.N_max = N_max
         self.prepare_selection(parent, selected, center, radius, x_dim, y_dim)
 
     def prepare_selection(self, parent, selected, center, radius, x_dim, y_dim):
@@ -81,14 +82,15 @@ class HierarchicalZoom(QObject):
         # Unsubscribe from further events on dataset
         self.root_dataset.operation_finished.disconnect(self.subsample)
 
-        if result[0].N > 1000:
+        if result[0].N > self.N_max:
             self.subsampler = RandomSampler()
             self.subsampler.set_input({
                 'parent': result[0]
             })
             self.subsampler.set_parameters({
-                'k': 1000,
-                'save_support': False
+                'k': self.N_max,
+                'save_support': False,
+                'n_hidden_features': result[0].hidden_features()
             })
             result[0].operation_finished.connect(self.embed)
             result[0].perform_operation(self.subsampler)
