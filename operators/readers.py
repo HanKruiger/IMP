@@ -26,6 +26,19 @@ class Reader(Operator):
             dataset = InputDataset(name, Y, hidden=len(hidden_features))
             out_datasets.append(dataset)
 
+        # Auto-HorzCat labels (may have unintended side-effects, but w/e. Yay for faster testing.)
+        if len(out_datasets) == 2 and any([dataset.m == 1 for dataset in out_datasets]) and out_datasets[0].N == out_datasets[1].N:
+            if out_datasets[1].m == 1:
+                labels = 1
+                data = 0
+            else:
+                labels = 0
+                data = 1
+
+            Y = np.column_stack([out_datasets[data].data(), out_datasets[labels].data()])
+            merged_dataset = InputDataset(out_datasets[data].name(), Y, hidden=1)
+            out_datasets = [merged_dataset]
+
         self.set_outputs(out_datasets)
 
     def read(self, path):
