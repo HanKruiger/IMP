@@ -11,7 +11,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import pdist
 
-class InverseProjector(Operator):
+class HypersphereFetcher(Operator):
 
     def __init__(self):
         super().__init__()
@@ -24,21 +24,16 @@ class InverseProjector(Operator):
         center = self.parameters()['center']
         radius = self.parameters()['radius']
 
+        # Hide the hidden features
         X_use, X_hidden = Operator.hide_features(nd_dataset.data(), nd_dataset.hidden_features())
         X_query_use, X_query_hidden = Operator.hide_features(query_nd.data(), query_nd.hidden_features())
         Y_query_use, Y_query_hidden = Operator.hide_features(query_2d.data(), query_2d.hidden_features())
 
-        avg_dist_2d = pdist(Y_query_use).mean()
-        avg_dist_nd = pdist(X_query_use).mean()
-        print('Mean dist in 2d: {}'.format(avg_dist_2d))
-        print('Mean dist in nd: {}'.format(avg_dist_nd))
-
         # Find the 'conversion factor' for distances from 2d to nd.
-        lbd = avg_dist_nd / avg_dist_2d
-        print('Lambda = {}'.format(lbd))
+        lbd = pdist(X_query_use).sum() / pdist(Y_query_use).sum()
 
         # Find the point in the 2d selection closest to the center (cursor)
-        nn = NearestNeighbors(1)
+        nn = NearestNeighbors(n_neighbors=1)
         nn.fit(Y_query_use)
         nearest_idx = nn.kneighbors(center.reshape(1, -1), return_distance=False).flatten()[0]
         # y_nearest = Y_query_use[nearest_idx, :] Not even needed.
@@ -51,7 +46,7 @@ class InverseProjector(Operator):
         nn.fit(X_use)
         X_radius_neighbors = nn.radius_neighbors(x_nearest.reshape(1, -1), return_distance=False).flatten()[0]
 
-        out_dataset = Selection('Rn({})'.format(nd_dataset.name()), nd_dataset, idcs=X_radius_neighbors, hidden=nd_dataset.hidden_features())
+        out_dataset = Selection('F({}, {})'.format(query_nd.name(), nd_dataset.name()), nd_dataset, idcs=X_radius_neighbors, hidden=nd_dataset.hidden_features())
         self.set_output(out_dataset)
 
 

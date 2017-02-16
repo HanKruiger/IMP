@@ -23,7 +23,7 @@ class DatasetsWidget(QGroupBox):
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
-        self.tree_view.doubleClicked.connect(self.show_dataset)
+        self.tree_view.doubleClicked.connect(self.show_dataset_item)
 
         self._workers = set()
 
@@ -42,20 +42,9 @@ class DatasetsWidget(QGroupBox):
         while type(parent) == Embedding:
             parent = parent.parent()
 
-
-        hierchical_zoom = HierarchicalZoom()
-        hierchical_zoom.set_input({
-            'parent': parent,
-            'selected': dataset
-        })
-        hierchical_zoom.set_parameters({
-            'center': center,
-            'radius': radius,
-            'x_dim': x_dim,
-            'y_dim': y_dim
-        })
+        hierchical_zoom = HierarchicalZoom(parent, dataset, center, radius, x_dim, y_dim)
         self.rememberme = hierchical_zoom
-        hierchical_zoom.initialize()
+        hierchical_zoom.when_done.connect(self.show_dataset)
         hierchical_zoom.run()
 
     def datasets(self):
@@ -83,16 +72,19 @@ class DatasetsWidget(QGroupBox):
 
         dataset.set_name(new_name)
 
-    # @pyqtSlot(int) Somehow I cannot decorate this!
-    def show_dataset(self, item):
-        dataset = self.model.data(item, role=Qt.UserRole)
-        if dataset is None:
-            return
-
+    def show_dataset(self, dataset):
         if not self.imp_app.visuals_widget.current_dataset() == dataset:
             self.imp_app.visuals_widget.update_attribute_list(dataset)
         else:
             self.imp_app.visuals_widget.clear_attributes()
+
+    # @pyqtSlot(int) Somehow I cannot decorate this!
+    def show_dataset_item(self, item):
+        dataset = self.model.data(item, role=Qt.UserRole)
+        if dataset is None:
+            return
+        self.show_dataset(dataset)
+        
 
     @pyqtSlot(object)
     def handle_reader_results(self, reader):

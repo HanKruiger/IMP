@@ -212,10 +212,11 @@ class LAMPEmbedder(Embedder):
         super().__init__()
 
     def embed(self, X):
-        representatives_dataset = self.input()['representatives']
+        representatives_2d = self.input()['representatives_2d']
+        representatives_nd = self.input()['representatives_nd']
 
-        Y_s, _ = Operator.hide_features(representatives_dataset.data(), self.parameters()['n_hidden_features'])
-        X_s, _ = Operator.hide_features(representatives_dataset.parent().data(), self.parameters()['n_hidden_features'])
+        Y_s, _ = Operator.hide_features(representatives_2d.data(), self.parameters()['n_hidden_features'])
+        X_s, _ = Operator.hide_features(representatives_nd.data(), self.parameters()['n_hidden_features'])
 
         N = X.shape[0]
         n = Y_s.shape[1]
@@ -245,5 +246,6 @@ class LAMPEmbedder(Embedder):
         along with their types and default values. """
         return {
             'parent': Dataset,
-            'representatives': Dataset
+            'representatives_2d': Dataset,
+            'representatives_nd': Dataset
         }

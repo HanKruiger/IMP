@@ -8,69 +8,121 @@ import numpy as np
 
 from model.dataset import Dataset, Merging
 from operators.operator import Operator
+from operators.embedders import LAMPEmbedder
+from operators.samplers import RandomSampler
 from operators.selectors import LenseSelector
-from operators.i_projectors import InverseProjector
+from operators.fetchers import HypersphereFetcher
 
 class HierarchicalZoom(QObject):
 
-    def initialize(self):
+    when_done = pyqtSignal(object)
+
+    def __init__(self, parent, selected, center, radius, x_dim, y_dim):
+        super().__init__()
         self.selector = LenseSelector()
         self.selector.set_input({
-            'embedding': self.input()['selected'],
-            'parent': self.input()['parent']
-        })
+            'embedding': selected,
+            'parent': parent
+            })
         self.selector.set_parameters({
-            'center': self.parameters()['center'],
-            'radius': self.parameters()['radius'],
-            'x_dim': self.parameters()['x_dim'],
-            'y_dim': self.parameters()['y_dim']
+            'center': center,
+            'radius': radius,
+            'x_dim': x_dim,
+            'y_dim': y_dim
         })
-
-        self.input()['parent'].operation_finished.connect(self.step_1)
+        self.parent = parent
 
     def run(self):
-        self.input()['parent'].perform_operation(self.selector)
+        self.parent.operation_finished.connect(self.step_1)
+        self.parent.perform_operation(self.selector)
 
+    # Fetch operation
     @pyqtSlot(object, object)
     def step_1(self, result, operator):
         if operator != self.selector:
             return # This was not the operator I was waiting for.
         
-        query_nd = result[0]
-        query_2d = result[1]
+        self.query_nd = result[0]
+        self.query_2d = result[1]
 
         # Unsubscribe from further events on dataset
-        self.input()['parent'].operation_finished.disconnect(self.step_1)
+        self.parent.operation_finished.disconnect(self.step_1)
 
-        self.root_dataset = self.input()['parent']
+        self.root_dataset = self.parent
         while self.root_dataset.parent() is not None and not isinstance(self.root_dataset, Merging):
             self.root_dataset = self.root_dataset.parent()
 
-        self.inverse_projector = InverseProjector()
-        self.inverse_projector.set_input({
+        self.fetcher = HypersphereFetcher()
+        self.fetcher.set_input({
             'nd_dataset': self.root_dataset,
-            'query_nd': query_nd,
-            'query_2d': query_2d
+            'query_nd': self.query_nd,
+            'query_2d': self.query_2d
         })
-        self.inverse_projector.set_parameters({
-            'center': self.parameters()['center'],
-            'radius': self.parameters()['radius']    
+        self.fetcher.set_parameters({
+            'center': self.selector.parameters()['center'],
+            'radius': self.selector.parameters()['radius']    
         })
 
         self.root_dataset.operation_finished.connect(self.step_2)
-        self.root_dataset.perform_operation(self.inverse_projector)
+        self.root_dataset.perform_operation(self.fetcher)
         
-
+    # Subsample operation, performed after the fetching, if needed.
     @pyqtSlot(object, object)
     def step_2(self, result, operator):
-        if operator != self.inverse_projector:
+        if operator != self.fetcher:
             return # This was not the operator I was waiting for.
 
         # Unsubscribe from further events on dataset
         self.root_dataset.operation_finished.disconnect(self.step_2)
 
-        print('In step 2')
+        if result[0].N > 1000:
+            self.subsampler = RandomSampler()
+            self.subsampler.set_input({
+                'parent': result[0]
+            })
+            self.subsampler.set_parameters({
+                'k': 1000,
+                'save_support': False
+            })
+            result[0].operation_finished.connect(self.step_3)
+            result[0].perform_operation(self.subsampler)
+        else:
+            self.subsampler = None
+            self.step_3(result, None)
 
+    # Embed operation
+    @pyqtSlot(object, object)
+    def step_3(self, result, operator):
+        if operator != self.subsampler:
+            return # This was not the operator I was waiting for.
+        if operator is not None:
+            # Unsubscribe from further events on dataset
+            result[0].parent().operation_finished.disconnect(self.step_3)
+
+        parent = result[0]
+        representatives_nd = self.query_nd
+        representatives_2d = self.query_2d
+
+        self.embedder = LAMPEmbedder()
+        self.embedder.set_input({
+            'parent': parent,
+            'representatives_nd': representatives_nd,
+            'representatives_2d': representatives_2d
+        })
+        self.embedder.set_parameters({
+            'n_hidden_features': parent.hidden_features()
+        })
+
+        parent.operation_finished.connect(self.done)
+        parent.perform_operation(self.embedder)
+
+    # Embed operation
+    @pyqtSlot(object, object)
+    def done(self, result, operator):
+        if operator != self.embedder:
+            return # This was not the operator I was waiting for.
+        print('Hierarchical zoom done! Emitting result.')
+        self.when_done.emit(result[0])
 
     @classmethod
     def input_description(cls):
