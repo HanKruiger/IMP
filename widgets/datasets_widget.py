@@ -43,9 +43,13 @@ class DatasetsWidget(QGroupBox):
             parent = parent.parent()
 
         hierchical_zoom = HierarchicalZoom(parent, dataset, center, radius, x_dim, y_dim)
-        self.rememberme = hierchical_zoom
         hierchical_zoom.when_done.connect(self.show_dataset)
         hierchical_zoom.run()
+        self._workers.add(hierchical_zoom)
+
+    def worker_done(self, dataset, worker):
+        self._workers.remove(worker)
+        self.show_dataset(dataset)
 
     def datasets(self):
         datasets = set()
