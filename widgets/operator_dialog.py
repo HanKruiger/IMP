@@ -18,6 +18,7 @@ class OperatorDialog(QDialog):
         self.operators = QComboBox()
         self.operators.addItem('PCA', PCAEmbedder)
         self.operators.addItem('Random sampler', RandomSampler)
+        self.operators.addItem('SVD-based sampler', SVDBasedSampler)
         self.operators.addItem('DBSCAN', DBSCANClusterer)
         self.operators.addItem('LAMP', LAMPEmbedder)
         self.operators.addItem('t-SNE', TSNEEmbedder)

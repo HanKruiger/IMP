@@ -9,7 +9,8 @@ import numpy as np
 from model.dataset import Dataset, Sampling
 from operators.operator import Operator
 from sklearn.neighbors import NearestNeighbors
-
+from scipy.sparse.linalg import svds
+from numpy.linalg import svd
 
 class Sampler(Operator):
 
@@ -69,7 +70,7 @@ class RandomSampler(Sampler):
 
     def sample(self, X):
         N = X.shape[0]
-        k = self.parameters()['k']
+        k = self.parameters()['n_samples']
         idcs = np.random.choice(N, k, replace=False)
         return idcs
 
@@ -77,6 +78,39 @@ class RandomSampler(Sampler):
     def parameters_description(cls):
         desc = super().parameters_description()
         desc.update({
-            'k': (int, 1000)
+            'n_samples': (int, 1000)
+        })
+        return desc
+
+class SVDBasedSampler(Sampler):
+
+    def __init__(self):
+        super().__init__()
+
+    def sample(self, X):
+        try:
+            k = self.parameters()['k']
+        except KeyError:
+            k = min(X.shape) // 2 + 1 # As suggested by Joia et al.
+
+        c = self.parameters()['n_samples']
+
+        if k < X.shape[1]:
+            _, _, V_T = svds(X.T, k=k)
+        else:
+            _, _, V_T = svd(X.T, full_matrices=False)
+
+        pi = (V_T ** 2).sum(axis=0)
+        # Get the c indices with the c largest value in pi (in no particular order)
+        idcs = np.argpartition(pi, -c)[-c:]
+
+        return idcs
+
+    @classmethod
+    def parameters_description(cls):
+        desc = super().parameters_description()
+        desc.update({
+            'n_samples': (int, 1000),
+            'k': (int, '')
         })
         return desc

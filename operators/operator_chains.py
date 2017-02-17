@@ -9,7 +9,7 @@ import numpy as np
 from model.dataset import Dataset, Merging
 from operators.operator import Operator
 from operators.embedders import LAMPEmbedder
-from operators.samplers import RandomSampler
+from operators.samplers import RandomSampler, SVDBasedSampler
 from operators.selectors import LenseSelector
 from operators.fetchers import HypersphereFetcher
 
@@ -83,12 +83,12 @@ class HierarchicalZoom(QObject):
         self.root_dataset.operation_finished.disconnect(self.subsample)
 
         if result[0].N > self.N_max:
-            self.subsampler = RandomSampler()
+            self.subsampler = SVDBasedSampler()
             self.subsampler.set_input({
                 'parent': result[0]
             })
             self.subsampler.set_parameters({
-                'k': self.N_max,
+                'n_samples': self.N_max,
                 'save_support': False,
                 'n_hidden_features': result[0].hidden_features()
             })
