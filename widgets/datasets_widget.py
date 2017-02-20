@@ -5,7 +5,7 @@ from PyQt5.QtCore import *
 from model.dataset import DatasetItem, InputDataset, Selection, Embedding, Dataset
 from operators.selectors import LenseSelector
 from operators.readers import Reader
-from operators.operator_chains import HierarchicalZoom
+from operators.hierarchical_zoom import HierarchicalZoom
 from widgets.operator_dialog import OperatorDialog
 
 

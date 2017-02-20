@@ -59,6 +59,8 @@ class Operator(QThread, QObject):
 
     @staticmethod
     def hide_features(X, n_hidden_features):
+        if n_hidden_features == 0:
+            return X, np.empty(shape=(X.shape[0], 0))
         n_features = X.shape[1] - n_hidden_features
 
         # Filter out the subset of features that can be used.

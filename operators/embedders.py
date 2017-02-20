@@ -39,8 +39,17 @@ class Embedder(Operator):
 
         X_use, X_hidden = Operator.hide_features(in_dataset.data(), n_hidden_features)
 
+        print(X_use.shape)
+        print(X_hidden.shape)
+
         # Do the embedding
         Y = self.embed(X_use)
+
+        try:
+            if self.parameters()['normalize']:
+                Y = Embedder.normalize(Y)
+        except KeyError:
+            pass
 
         # Concatenate the output of the embedding with the hidden features
         Y = np.column_stack([Y, X_hidden])
@@ -63,7 +72,8 @@ class Embedder(Operator):
     @classmethod
     def parameters_description(cls):
         return {
-            'n_hidden_features': (int, None)
+            'n_hidden_features': (int, None),
+            'normalize': (bool, False)
         }
 
 
@@ -75,6 +85,7 @@ class PCAEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         pca = PCA(**parameters)
         Y = pca.fit_transform(X)
         return Y
@@ -96,6 +107,7 @@ class TSNEEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         tsne = TSNE(**parameters)
         Y = tsne.fit_transform(X)
         return Y
@@ -119,6 +131,7 @@ class LLEEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         lle = LocallyLinearEmbedding(**parameters)
         Y = lle.fit_transform(X)
         return Y
@@ -141,6 +154,7 @@ class SpectralEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         se = SpectralEmbedding(**parameters)
         Y = se.fit_transform(X)
         return Y
@@ -163,6 +177,7 @@ class MDSEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         mds = MDS(**parameters)
         Y = mds.fit_transform(X)
         return Y
@@ -186,6 +201,7 @@ class IsomapEmbedder(Embedder):
     def embed(self, X):
         parameters = self.parameters().copy()
         del parameters['n_hidden_features']
+        del parameters['normalize']
         isomap = Isomap(**parameters)
         Y = isomap.fit_transform(X)
         return Y
