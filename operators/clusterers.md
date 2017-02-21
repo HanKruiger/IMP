@@ -16,7 +16,7 @@ Pro's
 Con's:
 
 * Suffers from local minima.
-* Slow: `O(N * k * T * m)` (`T`: Number of iterations, considered to be constant)
+* Not super fast: `O(N * k * T * m)` (`T`: Number of iterations, considered to be constant)
 
 # `MiniBatchKMeansClusterer`
 
@@ -42,4 +42,9 @@ Con's:
 * Robust to outliers. (Can also be considered a pro).
 * Not ideal for high-dimensional data. (Curse of Dimensionality)
 
-# TODO: EM Clustering
+# Agglomerative clustering with connectivity constraints
+
+Regular agglomerative clustering is too expensive (`O(N^2 * log(N)) for the full tree).
+When structure is imposed, and merges are restricted to only connected clusters, the 
+
+# BIRCH

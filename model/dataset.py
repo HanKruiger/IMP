@@ -161,6 +161,12 @@ class InputDataset(Dataset):
     def __init__(self, name, X, hidden=0):
         super().__init__(name, None, X, hidden=hidden)
 
+    def root(self):
+        return self
+
+    def root_data(self):
+        return self.data()
+
 
 class Clustering(Dataset):
 
@@ -177,11 +183,11 @@ class Embedding(Dataset):
     def __init__(self, name, parent, X, hidden=0):
         super().__init__(name, parent, X, hidden=hidden)
 
-class InverseProjection(Dataset):
+    def root(self):
+        return self.parent().root()
 
-    def __init__(self, name, parent, X, hidden=0):
-        super().__init__(name, parent, X, hidden=hidden)
-
+    def root_data(self):
+        return self.parent().root_data()
 
 class Selection(Dataset):
 
@@ -193,6 +199,12 @@ class Selection(Dataset):
 
     def data(self):
         return self.parent().data()[self._idcs, :]
+
+    def root(self):
+        return self.parent().root()
+
+    def root_data(self):
+        return self.parent().root_data()[self._idcs, :]
 
     def destroy(self):
         del self._idcs
@@ -216,3 +228,9 @@ class Merging(Dataset):
 
     def __init__(self, name, parent, X, hidden=0):
         super().__init__(name, parent, X, hidden=hidden)
+
+    def root(self):
+        return self
+
+    def root_data(self):
+        return self.data()

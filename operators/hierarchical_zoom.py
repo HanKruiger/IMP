@@ -58,9 +58,7 @@ class HierarchicalZoom(QObject):
 
     def fetch(self):
         # Find the root dataset for this dataset
-        self.root_dataset = self.parent
-        while self.root_dataset.parent() is not None and not isinstance(self.root_dataset, Merging):
-            self.root_dataset = self.root_dataset.parent()
+        self.root_dataset = self.parent.root()
 
         self.fetcher = HypersphereFetcher()
         self.fetcher.set_input({
@@ -153,7 +151,6 @@ class HierarchicalZoom(QObject):
 
         self.embed()
 
-    # Embed operation
     def embed(self):
         self.embedder = LAMPEmbedder()
         self.embedder.set_input({
@@ -168,7 +165,6 @@ class HierarchicalZoom(QObject):
         self.subsampled_fetch_results.operation_finished.connect(self.set_embed_results)
         self.subsampled_fetch_results.perform_operation(self.embedder)
 
-    # Embed operation
     @pyqtSlot(object, object)
     def set_embed_results(self, result, operator):
         if operator != self.embedder:

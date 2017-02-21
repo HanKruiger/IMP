@@ -8,8 +8,8 @@ from operators.operator import Operator
 import abc
 import os
 import numpy as np
-from sklearn.cluster import KMeans, MiniBatchKMeans, DBSCAN
-
+from sklearn.cluster import KMeans, MiniBatchKMeans, DBSCAN, Birch, AgglomerativeClustering
+from sklearn.neighbors import kneighbors_graph
 
 class Clusterer(Operator):
 
@@ -22,7 +22,8 @@ class Clusterer(Operator):
         for i in range(n_clusters):
             idcs = np.where(labels == i)[0]
             if len(idcs) == 0:
-                print('No support for {}'.format(idcs))
+                pass
+                # print('No support for {}'.format(idcs))
             support[i] = idcs
         return support
 
@@ -118,7 +119,6 @@ class MiniBatchKMeansClusterer(Clusterer):
         })
         return desc
 
-# According to my terminology, this is a sampler, not a clusterer...
 class DBSCANClusterer(Clusterer):
 
     def __init__(self):
@@ -149,5 +149,69 @@ class DBSCANClusterer(Clusterer):
             'metric': (str, 'euclidean'),
             'algorithm': (str, 'auto'),
             'leaf_size': (int, 30)
+        })
+        return desc
+
+class BirchClusterer(Clusterer):
+
+    def __init__(self):
+        super().__init__()
+
+
+    def cluster(self, X):
+        parameters = self.parameters().copy()
+        del parameters['n_hidden_features']
+        
+        birch = Birch(**parameters)
+        labels = birch.fit_predict(X)
+        
+        # Take average of items in the cluster
+        centroids = np.zeros((self.parameters()['n_clusters'], X.shape[1]))
+        for i in range(self.parameters()['n_clusters']):
+            centroids[i, :] = X[labels == i, :].mean(axis=0)
+
+        return centroids, labels
+
+    @classmethod
+    def parameters_description(cls):
+        desc = super().parameters_description()
+        desc.update({
+            'n_clusters': (int, 1000)
+        })
+        return desc
+
+class KNNAgglomerativeClusterer(Clusterer):
+
+    def __init__(self):
+        super().__init__()
+
+
+    def cluster(self, X):
+        parameters = self.parameters().copy()
+        del parameters['n_hidden_features']
+        
+        knn_graph = kneighbors_graph(X, parameters['k'], include_self=False)
+
+        del parameters['k']
+        parameters['connectivity'] = knn_graph
+
+        aggclu = AgglomerativeClustering(**parameters)
+        labels = aggclu.fit_predict(X)
+        
+        # Take average of items in the cluster
+        centroids = np.zeros((self.parameters()['n_clusters'], X.shape[1]))
+        for i in range(self.parameters()['n_clusters']):
+            centroids[i, :] = X[labels == i, :].mean(axis=0)
+
+        return centroids, labels
+
+    @classmethod
+    def parameters_description(cls):
+        desc = super().parameters_description()
+        desc.update({
+            'n_clusters': (int, 1000),
+            'linkage': (str, 'ward'),
+            'compute_full_tree': (bool, True),
+            'k': (int, 20)
         })
         return desc

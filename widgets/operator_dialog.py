@@ -28,6 +28,8 @@ class OperatorDialog(QDialog):
         self.operators.addItem('Isomap', IsomapEmbedder)
         self.operators.addItem('MiniBatchKMeans', MiniBatchKMeansClusterer)
         self.operators.addItem('KMeans', KMeansClusterer)
+        self.operators.addItem('Birch', BirchClusterer)
+        self.operators.addItem('KNNAgglomerativeClusterer', KNNAgglomerativeClusterer)
         self.operators.addItem('HorzCat', HorizontalConcat)
 
         self.operators.currentIndexChanged.connect(self.build_ui)
@@ -120,7 +122,7 @@ class OperatorDialog(QDialog):
                 hbox.addWidget(text_box)
                 self.parameter_form[name] = text_box, data_type
             elif data_type == bool:
-                check_box = QCheckBox(name)
+                check_box = QCheckBox()
                 check_box.setChecked(default)
                 hbox.addWidget(check_box)
                 self.parameter_form[name] = check_box, data_type
