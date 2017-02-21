@@ -39,9 +39,6 @@ class Embedder(Operator):
 
         X_use, X_hidden = Operator.hide_features(in_dataset.data(), n_hidden_features)
 
-        print(X_use.shape)
-        print(X_hidden.shape)
-
         # Do the embedding
         Y = self.embed(X_use)
 

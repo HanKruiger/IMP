@@ -23,7 +23,6 @@ class Reader(Operator):
         for path in paths:
             Y, hidden_features = self.read(path)
             name = os.path.basename(path).split('.')[0]
-            print('Hidden features for {}: {}'.format(name, hidden_features))
             dataset = InputDataset(name, Y, hidden=len(hidden_features))
             out_datasets.append(dataset)
 

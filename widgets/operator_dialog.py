@@ -88,7 +88,8 @@ class OperatorDialog(QDialog):
 
         for name, description in operator_class.input_description().items():
             input_dataset_selector = InputDatasetSelector(name, self.imp_app.datasets_widget.datasets())
-            input_dataset_selector.select(self.dataset)
+            if name == 'parent':
+                input_dataset_selector.select(self.dataset)
             self.input_layout.addLayout(input_dataset_selector)
             self.input_form[name] = input_dataset_selector
                 
@@ -132,6 +133,7 @@ class InputDatasetSelector(QHBoxLayout):
         super().__init__()
         self.combobox = QComboBox()
 
+        self.combobox.addItem('', None)
         for dataset in datasets:
             self.combobox.addItem(dataset.name(), dataset)
 

@@ -19,17 +19,34 @@ class Sampler(Operator):
 
     def run(self):
         in_dataset = self.input()['parent']
-        n_hidden_features = self.parameters()['n_hidden_features']
+        try:
+            n_hidden_features = self.parameters()['n_hidden_features']
+        except KeyError:
+            n_hidden_features = in_dataset.hidden_features()
 
         X_use, _ = Operator.hide_features(in_dataset.data(), n_hidden_features)
 
         idcs = self.sample(X_use)
 
         out_dataset = Sampling('S({})'.format(in_dataset.name()), parent=in_dataset, idcs=idcs, hidden=n_hidden_features)
-        if self.parameters()['save_support']:
-            Y_use, _ = Operator.hide_features(out_dataset.data(), n_hidden_features)
-            out_dataset.set_support(Sampler.compute_support(Y_use, X_use))
-        self.set_output(out_dataset)
+        
+        try:
+            if self.parameters()['save_support']:
+                Y_use, _ = Operator.hide_features(out_dataset.data(), n_hidden_features)
+                out_dataset.set_support(Sampler.compute_support(Y_use, X_use))
+        except KeyError:
+            pass
+
+        try:
+            if self.input()['sibling'] is not None:
+                in_sibling = self.input()['sibling']
+                assert(in_sibling.N == in_dataset.N)
+                out_sibling = Sampling('S({})'.format(in_sibling.name()), parent=in_sibling, idcs=idcs, hidden=in_sibling.hidden_features())
+                self.set_outputs([out_dataset, out_sibling])
+            else:
+                self.set_output(out_dataset)
+        except KeyError:
+            self.set_output(out_dataset)
 
     @abc.abstractmethod
     def sample(self, X):
@@ -59,7 +76,8 @@ class Sampler(Operator):
     @classmethod
     def input_description(cls):
         return {
-            'parent': Dataset
+            'parent': Dataset,
+            'sibling': Dataset # Same subsampling will be applied to sibling.
         }
 
 
