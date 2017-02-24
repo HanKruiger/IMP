@@ -11,7 +11,7 @@ from operators.operator import Operator
 from operators.embedders import LAMPEmbedder
 from operators.samplers import RandomSampler, SVDBasedSampler
 from operators.selectors import LenseSelector
-from operators.fetchers import HypersphereFetcher
+from operators.fetchers import HypersphereFetcher, KNNFetcher
 
 class HierarchicalZoom(QObject):
 
@@ -60,15 +60,14 @@ class HierarchicalZoom(QObject):
         # Find the root dataset for this dataset
         self.root_dataset = self.parent.root()
 
-        self.fetcher = HypersphereFetcher()
+        self.fetcher = KNNFetcher()
         self.fetcher.set_input({
             'nd_dataset': self.root_dataset,
             'query_nd': self.query_nd,
             'query_2d': self.query_2d
         })
         self.fetcher.set_parameters({
-            'center': self.selector.parameters()['center'],
-            'radius': self.selector.parameters()['radius']    
+            'N_max': self.N_max 
         })
 
         self.root_dataset.operation_finished.connect(self.set_fetch_results)
