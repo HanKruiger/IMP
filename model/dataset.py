@@ -206,6 +206,9 @@ class Selection(Dataset):
     def root_data(self):
         return self.parent().root_data()[self._idcs, :]
 
+    def idcs_in_root(self):
+        return self._idcs.copy()
+
     def destroy(self):
         del self._idcs
         if self._parent is not None:

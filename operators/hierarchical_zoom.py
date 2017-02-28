@@ -88,6 +88,7 @@ class HierarchicalZoom(QObject):
 
     def subsample_fetch_results(self):
         if self.fetch_results.N > self.N_max:
+            print('Subsampling fetched results. ({} points is too much)'.format(self.fetch_results.N))
             self.subsampler = RandomSampler()
             self.subsampler.set_input({
                 'parent': self.fetch_results
@@ -117,7 +118,7 @@ class HierarchicalZoom(QObject):
     def subsample_representatives(self):
         if self.parent.N == self.query_nd.N:
             # It is a zoom OUT operation. Keep fraction of control points.
-            n_keep = int(self.query_nd.N * (self.query_nd.N / self.fetch_results.N))
+            n_keep = min(int(self.query_nd.N * (self.query_nd.N / self.fetch_results.N)), self.query_nd.N)
             print('Zoom OUT: Keeping {} of the {} selected 2D points as control points.'.format(n_keep, self.query_nd.N))
 
             self.repr_subsampler = RandomSampler()

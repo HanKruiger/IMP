@@ -76,6 +76,7 @@ class KNNFetcher(Operator):
         super().__init__()
 
     def run(self):
+        print('KNNFetcher:')
         nd_dataset = self.input()['nd_dataset']
         query_nd = self.input()['query_nd']
         query_2d = self.input()['query_2d']
@@ -88,46 +89,37 @@ class KNNFetcher(Operator):
         X_query_use, X_query_hidden = Operator.hide_features(query_nd.data(), query_nd.hidden_features())
         Y_query_use, Y_query_hidden = Operator.hide_features(query_2d.data(), query_2d.hidden_features())
 
+        # Remove points in X_query_use from X_use, because we don't want the same points as the query.
+        # Take care of indexing!!!
+        
         # Find the point in the 2d selection closest to the center (cursor)
         nn = NearestNeighbors(n_neighbors=N_fetch) # Can probably query fewer points..
         nn.fit(X_use)
-        distss, idcss = nn.kneighbors(X_query_use, return_distance=True)
+        nbr_dists, nbr_idcs = nn.kneighbors(X_query_use, return_distance=True)
 
-        def red_func(tup1, tup2):
-            dists1, idcs1 = tup1
-            dists2, idcs2 = tup2
+        print('\tFetched {} neighbours.'.format(nbr_idcs.size))
 
-            idcs1_alone = np.setdiff1d(idcs1, idcs2, assume_unique=True)
-            idcs2_alone = np.setdiff1d(idcs2, idcs1, assume_unique=True)
-            idcs_intersect = np.intersect1d(idcs1, idcs2, assume_unique=True)
-            
-            try:
-                idx1 = np.hstack([np.where(idcs1 == idx)[0] for idx in idcs1_alone])
-            except IndexError:
-                idx1 = []
-            dists1_alone = dists1[idx1]
-            try:
-                idx2 = np.hstack([np.where(idcs2 == idx)[0] for idx in idcs2_alone])
-            except IndexError:
-                idx2 = []
-            dists2_alone = dists2[idx2]
+        U_idcs = np.unique(nbr_idcs)
+        U_dists = np.full(U_idcs.size, np.inf)
 
-            idx1 = np.hstack([np.where(idcs1 == idx)[0] for idx in idcs_intersect])
-            idx2 = np.hstack([np.where(idcs2 == idx)[0] for idx in idcs_intersect])
-            dists_intersect = np.minimum(dists1[idx1], dists2[idx2])
+        print('\tReducing neighbours into {} ({:.2f}%) unique neighbours.'.format(U_idcs.size, 100 * U_idcs.size / nbr_idcs.size))
 
 
-            dists = np.hstack([dists1_alone, dists2_alone, dists_intersect])
-            idcs = np.hstack([idcs1_alone, idcs2_alone, idcs_intersect])
+        # Dict that maps indices in X_use to indices in U_idcs/U_dists
+        idx_to_idx = dict([(i, j) for j, i in enumerate(U_idcs)])
 
-            return dists, idcs
+        for i in range(nbr_idcs.shape[0]):
+            for j in range(nbr_idcs.shape[1]):
+                k = nbr_idcs[i, j] # Index in X_use
+                dist = nbr_dists[i, j] # New distance
+                l = idx_to_idx[k] # Index in U_idcs
+                U_dists[l] = min(U_dists[l], dist) # Take minimum of the two
 
-        reduced_dists, reduced_idcss = reduce(
-            red_func,
-            zip(distss, idcss)
-        )
+        print('\tMinimum distance: {}'.format(U_dists.min()))
 
-        print(len(reduced_idcss))
+        closest_nbrs = np.argpartition(U_dists, N_fetch)[:N_fetch]
+        X_knn = U_idcs[closest_nbrs]
+        print('\tUsing {} closest neighbours.'.format(X_knn.size))
 
-        out_dataset = Selection('F({}, {})'.format(query_nd.name(), nd_dataset.name()), nd_dataset, idcs=X_radius_neighbors, hidden=nd_dataset.hidden_features())
+        out_dataset = Selection('F({}, {})'.format(query_nd.name(), nd_dataset.name()), nd_dataset, idcs=X_knn, hidden=nd_dataset.hidden_features())
         self.set_output(out_dataset)
