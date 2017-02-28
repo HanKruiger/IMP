@@ -66,8 +66,7 @@ class HypersphereFetcher(Operator):
     def parameters_description(cls):
         return {
             'center': (np.ndarray, None),
-            'radius': (np.float, None),
-            'k': (int, None)
+            'radius': (np.float, None)
         }
 
 class KNNFetcher(Operator):
@@ -85,13 +84,16 @@ class KNNFetcher(Operator):
         N_fetch = N_max - query_nd.N
 
         # Hide the hidden features
-        X_use, X_hidden = Operator.hide_features(nd_dataset.data(), nd_dataset.hidden_features())
         X_query_use, X_query_hidden = Operator.hide_features(query_nd.data(), query_nd.hidden_features())
         Y_query_use, Y_query_hidden = Operator.hide_features(query_2d.data(), query_2d.hidden_features())
 
         # Remove points in X_query_use from X_use, because we don't want the same points as the query.
-        # Take care of indexing!!!
+        dataset_no_query_idcs = np.delete(np.arange(nd_dataset.N), query_nd.indices(), axis=0)
+        nd_dataset_noquery = Selection('S_m({})'.format(nd_dataset.name), nd_dataset, idcs=dataset_no_query_idcs, hidden=nd_dataset.hidden_features())
         
+        X_use, X_hidden = Operator.hide_features(nd_dataset_noquery.data(), nd_dataset_noquery.hidden_features())
+        print(X_use.shape)
+
         # Find the point in the 2d selection closest to the center (cursor)
         nn = NearestNeighbors(n_neighbors=N_fetch) # Can probably query fewer points..
         nn.fit(X_use)
@@ -103,7 +105,6 @@ class KNNFetcher(Operator):
         U_dists = np.full(U_idcs.size, np.inf)
 
         print('\tReducing neighbours into {} ({:.2f}%) unique neighbours.'.format(U_idcs.size, 100 * U_idcs.size / nbr_idcs.size))
-
 
         # Dict that maps indices in X_use to indices in U_idcs/U_dists
         idx_to_idx = dict([(i, j) for j, i in enumerate(U_idcs)])
@@ -118,8 +119,11 @@ class KNNFetcher(Operator):
         print('\tMinimum distance: {}'.format(U_dists.min()))
 
         closest_nbrs = np.argpartition(U_dists, N_fetch)[:N_fetch]
-        X_knn = U_idcs[closest_nbrs]
+        X_knn = U_idcs[closest_nbrs] # Indices the data in nd_dataset_noquery
+        X_knn = nd_dataset_noquery.indices()[X_knn] # Indices the data in nd_dataset
         print('\tUsing {} closest neighbours.'.format(X_knn.size))
+
+        X_knn = np.concatenate([X_knn, query_nd.indices()])
 
         out_dataset = Selection('F({}, {})'.format(query_nd.name(), nd_dataset.name()), nd_dataset, idcs=X_knn, hidden=nd_dataset.hidden_features())
         self.set_output(out_dataset)

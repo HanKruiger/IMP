@@ -69,6 +69,12 @@ class Dataset(QObject):
     def data(self):
         return self._X
 
+    def indices(self):
+        if self.parent() is not None:
+            return parent().indices()
+        else:
+            return np.arange(self.N)
+
     def hidden_features(self):
         return self._n_hidden_features
 
@@ -206,8 +212,8 @@ class Selection(Dataset):
     def root_data(self):
         return self.parent().root_data()[self._idcs, :]
 
-    def idcs_in_root(self):
-        return self._idcs.copy()
+    def indices(self):
+        return self.parent().indices()[self._idcs]
 
     def destroy(self):
         del self._idcs

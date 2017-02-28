@@ -60,15 +60,30 @@ class HierarchicalZoom(QObject):
         # Find the root dataset for this dataset
         self.root_dataset = self.parent.root()
 
-        self.fetcher = KNNFetcher()
-        self.fetcher.set_input({
-            'nd_dataset': self.root_dataset,
-            'query_nd': self.query_nd,
-            'query_2d': self.query_2d
-        })
-        self.fetcher.set_parameters({
-            'N_max': self.N_max 
-        })
+        if self.query_nd.N == self.parent.N:
+            print('Selection is equivalent to what\'s on screen! Using HypersphereFetcher.')
+            self.fetcher = HypersphereFetcher()
+            self.fetcher.set_input({
+                'nd_dataset': self.root_dataset,
+                'query_nd': self.query_nd,
+                'query_2d': self.query_2d
+            })
+            self.fetcher.set_parameters({
+                'center': self.selector.parameters()['center'],
+                'radius': self.selector.parameters()['radius']
+            })
+        else:
+            print('Selection is smaller than what\'s on screen! Using KNNFetcher.')
+            self.fetcher = KNNFetcher()
+            self.fetcher.set_input({
+                'nd_dataset': self.root_dataset,
+                'query_nd': self.query_nd,
+                'query_2d': self.query_2d
+            })
+            self.fetcher.set_parameters({
+                'N_max': self.N_max 
+            })
+
 
         self.root_dataset.operation_finished.connect(self.set_fetch_results)
         self.root_dataset.perform_operation(self.fetcher)
