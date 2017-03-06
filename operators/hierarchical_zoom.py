@@ -114,7 +114,7 @@ class HierarchicalZoom(QObject):
             self.fetch_results.operation_finished.connect(self.set_subsampled_fetch_results)
             self.fetch_results.perform_operation(self.subsampler)
         else:
-            print('No need to subsample fetched results. Hit lowest-level data. ({} points)'.format(self.fetch_results.N))
+            # print('No need to subsample fetched results. Hit lowest-level data. ({} points)'.format(self.fetch_results.N))
             self.subsampler = None
             self.set_subsampled_fetch_results((self.fetch_results,), None)
 
@@ -163,6 +163,8 @@ class HierarchicalZoom(QObject):
 
         self.representatives_nd = result[0]
         self.representatives_2d = result[1]
+        
+        # self.representatives_2d.normalize()
 
         self.embed()
 
@@ -174,7 +176,8 @@ class HierarchicalZoom(QObject):
             'representatives_2d': self.representatives_2d
         })
         self.embedder.set_parameters({
-            'n_hidden_features': self.subsampled_fetch_results.hidden_features()
+            'n_hidden_features': self.subsampled_fetch_results.hidden_features(),
+            'normalize': False
         })
 
         self.subsampled_fetch_results.operation_finished.connect(self.set_embed_results)

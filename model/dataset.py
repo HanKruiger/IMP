@@ -101,6 +101,21 @@ class Dataset(QObject):
         
         self.operation_finished.emit(result, operator)
 
+    def normalize(self):
+        Y = self.data()[:, :-self.hidden_features()].copy()
+
+        # Translate s.t. smallest values for both x and y are 0.
+        for dim in range(Y.shape[1]):
+            Y[:, dim] += -Y[:, dim].min()
+
+        # Scale s.t. max(max(x, y)) = 1 (while keeping the same aspect ratio!)
+        scaling = 1 / (np.absolute(Y).max())
+        Y *= scaling
+
+        # Centralize the median
+        Y -= np.median(Y, axis=0)
+        self.data()[:, :-self.hidden_features()] = Y
+
     def vbo(self, dim):
         try:
             return self._vbos[dim]

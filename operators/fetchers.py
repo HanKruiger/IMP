@@ -117,9 +117,17 @@ class KNNFetcher(Operator):
                 U_dists[l] = min(U_dists[l], dist) # Take minimum of the two
 
         print('\tMinimum distance: {}'.format(U_dists.min()))
+        print('\tMaximum distance: {}'.format(U_dists.max()))
+        print('\tsize(U_dists): {}'.format(U_dists.size))
+        print('\tN_fetch: {}'.format(N_fetch))
 
-        closest_nbrs = np.argpartition(U_dists, N_fetch)[:N_fetch]
-        X_knn = U_idcs[closest_nbrs] # Indices the data in nd_dataset_noquery
+
+        if U_dists.size == N_fetch:
+            X_knn = U_idcs
+        else:
+            closest_nbrs = np.argpartition(U_dists, N_fetch)[:N_fetch]
+            X_knn = U_idcs[closest_nbrs] # Indices the data in nd_dataset_noquery
+        
         X_knn = nd_dataset_noquery.indices()[X_knn] # Indices the data in nd_dataset
         print('\tUsing {} closest neighbours.'.format(X_knn.size))
 
