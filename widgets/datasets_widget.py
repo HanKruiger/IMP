@@ -3,6 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from model.dataset import DatasetItem, InputDataset, Selection, Embedding, Dataset
+from model.datasets_view import DatasetsView
 from operators.selectors import LenseSelector
 from operators.readers import Reader
 from operators.hierarchical_zoom import HierarchicalZoom
@@ -91,10 +92,15 @@ class DatasetsWidget(QGroupBox):
         dataset.set_name(new_name)
 
     def show_dataset(self, dataset):
-        if not self.imp_app.visuals_widget.current_dataset() == dataset:
-            self.imp_app.visuals_widget.update_attribute_list(dataset)
-        else:
-            self.imp_app.visuals_widget.clear_attributes()
+        datasets_view = DatasetsView()
+        datasets_view.add_dataset(dataset, 'regular', lazy=False)
+
+        self.imp_app.gl_widget.set_datasets_view(datasets_view)
+
+        # if not self.imp_app.visuals_widget.current_dataset() == dataset:
+        #     self.imp_app.visuals_widget.update_attribute_list(dataset)
+        # else:
+        #     self.imp_app.visuals_widget.clear_attributes()
 
     # @pyqtSlot(int) Somehow I cannot decorate this!
     def show_dataset_item(self, item):

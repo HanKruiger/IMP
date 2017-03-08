@@ -20,7 +20,6 @@ class Dataset(QObject):
         self._workers = set()
         self._children = []
         self._q_item = None
-        self._vbos = dict()
 
         if X is not None:
             self._X = X
@@ -40,7 +39,6 @@ class Dataset(QObject):
         del self._X
         if self._parent is not None:
             self._parent.remove_child(self)
-        self.destroy_vbos()
 
     def parent(self):
         return self._parent
@@ -115,43 +113,6 @@ class Dataset(QObject):
         # Centralize the median
         Y -= np.median(Y, axis=0)
         self.data()[:, :-self.hidden_features()] = Y
-
-    def vbo(self, dim):
-        try:
-            return self._vbos[dim]
-        except KeyError:
-            return self.make_vbo(dim)
-
-    def make_vbo(self, dim, normalize=False):
-        X_32 = np.array(self.data()[:, dim], dtype=np.float32)
-
-        if normalize:
-            X_32 -= X_32.min()
-            X_32 /= X_32.max()
-
-        self._vbos[dim] = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
-        self._vbos[dim].create()
-        self._vbos[dim].bind()
-        self._vbos[dim].setUsagePattern(QOpenGLBuffer.StaticDraw)
-        self._vbos[dim].allocate(X_32.data, X_32.data.nbytes)
-        self._vbos[dim].release()
-        return self._vbos[dim]
-
-    def normalized_vbo(self, dim):
-        try:
-            self.destroy_vbo(dim)
-        except KeyError:
-            pass
-        return self.make_vbo(dim, normalize=True)
-
-    def destroy_vbos(self):
-        for dim, vbo in self._vbos.copy().items():
-            vbo.destroy()
-            del self._vbos[dim]
-
-    def destroy_vbo(self, dim):
-        self._vbos[dim].destroy()
-        del self._vbos[dim]
 
 
 class DatasetItem(QStandardItem):
@@ -234,7 +195,6 @@ class Selection(Dataset):
         del self._idcs
         if self._parent is not None:
             self._parent.remove_child(self)
-        self.destroy_vbos()
 
 
 class Sampling(Selection):

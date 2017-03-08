@@ -24,6 +24,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.lense = Lense(self)
 
         self.attributes = dict()
+        self.datasets_view = None
 
         self.N = 0
 
@@ -45,29 +46,24 @@ class OpenGLWidget(QOpenGLWidget):
     def clear(self):
         pass
 
-    def set_attribute(self, dataset, dim, N, m, attribute):
-        # Remove this attribute if it is already set.
-        if attribute in self.attributes:
-            self.disable_attribute(attribute)
+    def set_datasets_view(self, datasets_view):
+        if self.datasets_view is not None:
+            self.disable_attributes()
+            self.datasets_view.destroy()
 
+        self.datasets_view = datasets_view
 
-        # Loop over attributes and remove the ones incompatible with N
-        for attr, descr in self.attributes.copy().items():
-            if descr['size'] != N:
-                self.disable_attribute(attr)
+        offset = 0
+        for dataset, viewed_dataset in datasets_view:
+            kind = viewed_dataset['kind']
+            vbos = viewed_dataset['vbos']
+            self.set_attribute(vbos[0], 0, dataset.N, 1, 'position_x', offset)
+            self.set_attribute(vbos[1], 1, dataset.N, 1, 'position_y', offset)
+            self.set_attribute(vbos[2], 2, dataset.N, 1, 'color', offset)
+            offset += dataset.N
 
-        self.N = N
-        self.attributes[attribute] = {'dataset': dataset, 'dim': dim, 'size': N}
-
-        normalize = False
-
+    def set_attribute(self, vbo, dim, N, m, attribute, offset):
         self.makeCurrent()
-
-        # Get the VBO from the dataset (will be generated if it doesn't exist)
-        if not normalize:
-            vbo = dataset.vbo(dim)
-        else:
-            vbo = dataset.normalized_vbo(dim)
 
         # Bind the VAO. It will remember the enabled attributes
         self.vao.bind()
@@ -76,13 +72,13 @@ class OpenGLWidget(QOpenGLWidget):
         self.shader_program.bind()
         attrib_loc = self.shader_program.attributeLocation(attribute)
 
-        # Explain the format of the 'position' attribute buffer to the shader.
+        # Explain the format of the attribute buffer to the shader.
         self.shader_program.enableAttributeArray(attrib_loc)
         vbo.bind()
         self.shader_program.setAttributeBuffer(
             attrib_loc,    # Attribute location
             self.gl.GL_FLOAT,       # Data type of elements
-            0,                      # Offset
+            offset,                      # Offset
             m,                      # Number of components per vertex
             0                       # Stride
         )
@@ -94,23 +90,17 @@ class OpenGLWidget(QOpenGLWidget):
         self.doneCurrent()
         self.update()
 
-    def disable_attribute(self, attribute):
-        try:
-            del self.attributes[attribute]
-            if not self.attributes:
-                self.N = 0
-
-            self.makeCurrent()
-            self.vao.bind()
-            self.shader_program.bind()
-            self.shader_program.disableAttributeArray(attribute)
-            self.shader_program.release()
-            self.vao.release()
-            self.doneCurrent()
-            self.update()
-
-        except KeyError:
-            print('Tried to disable attrubute that was not enabled.')
+    def disable_attributes(self):
+        self.makeCurrent()
+        self.vao.bind()
+        self.shader_program.bind()
+        self.shader_program.disableAttributeArray('position_x')
+        self.shader_program.disableAttributeArray('position_y')
+        self.shader_program.disableAttributeArray('color')
+        self.shader_program.release()
+        self.vao.release()
+        self.doneCurrent()
+        self.update()
 
     def zoom(self, factor, pos):
         p_world = self.pixel_to_world(pos, d=3)
@@ -221,7 +211,13 @@ class OpenGLWidget(QOpenGLWidget):
         self.shader_program.setUniformValue('opacity', self.opacity)
 
         self.vao.bind()
-        gl.glDrawArrays(gl.GL_POINTS, 0, self.N)
+        offset = 0
+        if self.datasets_view is not None:
+            for dataset, viewed_dataset in self.datasets_view:
+                kind = viewed_dataset['kind']
+                print(kind)
+                gl.glDrawArrays(gl.GL_POINTS, offset, dataset.N)
+                offset += dataset.N
         self.vao.release()
 
         self.shader_program.release()
