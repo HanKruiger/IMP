@@ -48,21 +48,19 @@ class OpenGLWidget(QOpenGLWidget):
 
     def set_datasets_view(self, datasets_view):
         if self.datasets_view is not None:
-            self.disable_attributes()
+            self.makeCurrent()
+            self.disable_attributes(self.shader_program)
+            self.doneCurrent()
             self.datasets_view.destroy()
+
+        self.makeCurrent()
+        datasets_view.init_vaos_and_buffers()
+        datasets_view.enable_attributes(self.shader_program, self.gl)
+        self.doneCurrent()
 
         self.datasets_view = datasets_view
 
-        offset = 0
-        for dataset, viewed_dataset in datasets_view:
-            kind = viewed_dataset['kind']
-            vbos = viewed_dataset['vbos']
-            self.set_attribute(vbos[0], 0, dataset.N, 1, 'position_x', offset)
-            self.set_attribute(vbos[1], 1, dataset.N, 1, 'position_y', offset)
-            self.set_attribute(vbos[2], 2, dataset.N, 1, 'color', offset)
-            offset += dataset.N
-
-    def set_attribute(self, vbo, dim, N, m, attribute, offset):
+    def set_attribute(self, vbo, dim, N, m, attribute):
         self.makeCurrent()
 
         # Bind the VAO. It will remember the enabled attributes
@@ -78,7 +76,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.shader_program.setAttributeBuffer(
             attrib_loc,    # Attribute location
             self.gl.GL_FLOAT,       # Data type of elements
-            offset,                      # Offset
+            0,                      # Offset
             m,                      # Number of components per vertex
             0                       # Stride
         )
@@ -86,18 +84,6 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.shader_program.release()
 
-        self.vao.release()
-        self.doneCurrent()
-        self.update()
-
-    def disable_attributes(self):
-        self.makeCurrent()
-        self.vao.bind()
-        self.shader_program.bind()
-        self.shader_program.disableAttributeArray('position_x')
-        self.shader_program.disableAttributeArray('position_y')
-        self.shader_program.disableAttributeArray('color')
-        self.shader_program.release()
         self.vao.release()
         self.doneCurrent()
         self.update()
@@ -165,8 +151,7 @@ class OpenGLWidget(QOpenGLWidget):
        
         center = self.lense.world_coordinates()
         radius = self.lense.world_radius()
-        dataset = self.attributes['position_x']['dataset']
-        self.imp_app.datasets_widget.hierarchical_zoom(dataset, self.attributes['position_x']['dim'], self.attributes['position_y']['dim'], center, radius)
+        self.imp_app.datasets_widget.hierarchical_zoom(self.datasets_view, center, radius)
         
 
     def wheelEvent(self, wheel_event):
@@ -207,18 +192,11 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('projection', self.projection)
-        self.shader_program.setUniformValue('point_size', self.point_size)
         self.shader_program.setUniformValue('opacity', self.opacity)
+        self.shader_program.setUniformValue('point_size', self.point_size)
 
-        self.vao.bind()
-        offset = 0
         if self.datasets_view is not None:
-            for dataset, viewed_dataset in self.datasets_view:
-                kind = viewed_dataset['kind']
-                print(kind)
-                gl.glDrawArrays(gl.GL_POINTS, offset, dataset.N)
-                offset += dataset.N
-        self.vao.release()
+            self.datasets_view.draw(self)
 
         self.shader_program.release()
 

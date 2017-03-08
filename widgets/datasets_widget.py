@@ -9,6 +9,7 @@ from operators.readers import Reader
 from operators.hierarchical_zoom import HierarchicalZoom
 from widgets.operator_dialog import OperatorDialog
 
+import numpy as np
 
 class DatasetsWidget(QGroupBox):
 
@@ -46,7 +47,11 @@ class DatasetsWidget(QGroupBox):
 
         self.setAcceptDrops(True)
 
-    def hierarchical_zoom(self, dataset, x_dim, y_dim, center, radius):
+    def hierarchical_zoom(self, datasets_view, center, radius, x_dim=0, y_dim=1):
+        if len(datasets_view.datasets()) > 1:
+            raise NotImplementedError()
+        else:
+            dataset = datasets_view.datasets()[0]
         parent = dataset
         while type(parent) == Embedding:
             parent = parent.parent()
@@ -93,14 +98,12 @@ class DatasetsWidget(QGroupBox):
 
     def show_dataset(self, dataset):
         datasets_view = DatasetsView()
-        datasets_view.add_dataset(dataset, 'regular', lazy=False)
+
+        datasets_view.add_dataset(dataset, 'regular')
+        dummy = Dataset('dummy', None, np.array([[0, 0, 0.2], [1, 0, 0.4], [0, 1, 0.6], [1, 1, 0.8]]), hidden=1)
+        datasets_view.add_dataset(dummy, 'representatives')
 
         self.imp_app.gl_widget.set_datasets_view(datasets_view)
-
-        # if not self.imp_app.visuals_widget.current_dataset() == dataset:
-        #     self.imp_app.visuals_widget.update_attribute_list(dataset)
-        # else:
-        #     self.imp_app.visuals_widget.clear_attributes()
 
     # @pyqtSlot(int) Somehow I cannot decorate this!
     def show_dataset_item(self, item):
