@@ -3,7 +3,6 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
-from widgets.gl_entities.lense import Lense
 from operators.selectors import LenseSelector
 from model.dataset import Embedding
 
@@ -20,8 +19,6 @@ class OpenGLWidget(QOpenGLWidget):
         self.pixel = QMatrix4x4()
 
         self.mouse = QVector2D(0, 0)
-
-        self.lense = Lense(self)
 
         self.attributes = dict()
         self.datasets_view = None
@@ -59,6 +56,8 @@ class OpenGLWidget(QOpenGLWidget):
         self.doneCurrent()
 
         self.datasets_view = datasets_view
+
+        self.update()
 
     def set_attribute(self, vbo, dim, N, m, attribute):
         self.makeCurrent()
@@ -149,11 +148,6 @@ class OpenGLWidget(QOpenGLWidget):
     def mousePressEvent(self, e):
         self.mouse = QVector2D(e.pos())
        
-        center = self.lense.world_coordinates()
-        radius = self.lense.world_radius()
-        self.imp_app.datasets_widget.hierarchical_zoom(self.datasets_view, center, radius)
-        
-
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
             wheel_event.ignore()
@@ -176,8 +170,6 @@ class OpenGLWidget(QOpenGLWidget):
         self.init_shaders()
         self.init_vao()
 
-        self.lense.init_gl()
-
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
         gl.glEnable(gl.GL_PROGRAM_POINT_SIZE)
         gl.glEnable(gl.GL_MULTISAMPLE)
@@ -199,9 +191,6 @@ class OpenGLWidget(QOpenGLWidget):
             self.datasets_view.draw(self)
 
         self.shader_program.release()
-
-        self.lense.draw()
-
 
     def resizeGL(self, w, h):
         # Make new projection matrix to retain aspect ratio

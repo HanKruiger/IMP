@@ -47,26 +47,6 @@ class DatasetsWidget(QGroupBox):
 
         self.setAcceptDrops(True)
 
-    def hierarchical_zoom(self, datasets_view, center, radius, x_dim=0, y_dim=1):
-        if len(datasets_view.datasets()) > 1:
-            raise NotImplementedError()
-        else:
-            dataset = datasets_view.datasets()[0]
-        parent = dataset
-        while type(parent) == Embedding:
-            parent = parent.parent()
-
-        if self.N_max_textbox.hasAcceptableInput():
-            N_max = int(self.N_max_textbox.text())
-        else:
-            print('Invalid input. Setting N_max = 1000')
-            N_max = 1000
-
-        hierchical_zoom = HierarchicalZoom(parent, dataset, center, radius, x_dim, y_dim, N_max)
-        hierchical_zoom.when_done.connect(self.show_dataset)
-        hierchical_zoom.run()
-        self._workers.add(hierchical_zoom)
-
     def worker_done(self, dataset, worker):
         self._workers.remove(worker)
         self.show_dataset(dataset)
