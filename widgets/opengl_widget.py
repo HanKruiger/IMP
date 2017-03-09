@@ -13,15 +13,25 @@ class OpenGLWidget(QOpenGLWidget):
         self.imp_app = imp_app
         self.setMouseTracking(True)
 
+        # Transforms points from world space to view space
         self.view = QMatrix4x4()
-        self.view.scale(0.25, 0.25)
+        self.view_new = QMatrix4x4(self.view)
+        self.view_transition = 0.0
+
+        # Transforms points from view space to clip space
         self.projection = QMatrix4x4()
+        
+        # Transforms points from screen space to clip space
+        # (inverse viewport transform)
         self.pixel = QMatrix4x4()
 
         self.mouse = QVector2D(0, 0)
 
         self.attributes = dict()
         self.datasets_view = None
+
+        self.zoom_animation_timer = QTimer()
+        self.zoom_animation_timer.timeout.connect(self.zoom_animation)
 
         self.N = 0
 
@@ -43,12 +53,16 @@ class OpenGLWidget(QOpenGLWidget):
     def clear(self):
         pass
 
-    def set_datasets_view(self, datasets_view):
+    def clear_datasets_view(self):
         if self.datasets_view is not None:
             self.makeCurrent()
-            self.disable_attributes(self.shader_program)
-            self.doneCurrent()
             self.datasets_view.destroy()
+            self.datasets_view = None
+            self.doneCurrent()
+            self.update()
+
+    def set_datasets_view(self, datasets_view):
+        self.clear_datasets_view()
 
         self.makeCurrent()
         datasets_view.init_vaos_and_buffers()
@@ -56,6 +70,19 @@ class OpenGLWidget(QOpenGLWidget):
         self.doneCurrent()
 
         self.datasets_view = datasets_view
+
+        x_min, x_max, y_min, y_max = datasets_view.get_bounds()
+
+        # Compute the center of the all-enclosing square, and the distance from center to its sides.
+        center = QVector2D((x_min + x_max) / 2, (y_min + y_max) / 2)
+        dist_to_sides = 0.5 * max(x_max - x_min, y_max - y_min)
+
+        self.view.setToIdentity()
+        self.view.scale(1 / dist_to_sides)
+        self.view.translate(-center.x(), -center.y())
+        
+        visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view)
+        assert(len(invisibles) == 0)
 
         self.update()
 
@@ -91,10 +118,16 @@ class OpenGLWidget(QOpenGLWidget):
         p_world = self.pixel_to_world(pos, d=3)
 
         # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
-        self.view.translate((1 - factor) * p_world)
-        self.view.scale(factor)
+        self.view_new = QMatrix4x4(self.view)
+        self.view_new.translate((1 - factor) * p_world)
+        self.view_new.scale(factor)
+        
+        if factor > 1:
+            self.datasets_view.filter_unseen_points(self.projection * self.view)
 
-        self.update()
+        if not self.zoom_animation_timer.isActive():
+            self.view_transition = 0.0
+            self.zoom_animation_timer.start(20)
 
     def pixel_to_world(self, p_in, d=2):
         try:
@@ -153,7 +186,7 @@ class OpenGLWidget(QOpenGLWidget):
             wheel_event.ignore()
             return
         wheel_event.accept()
-        factor = 1.01 ** wheel_event.pixelDelta().y()
+        factor = 1.1 ** wheel_event.pixelDelta().y()
         self.zoom(factor, wheel_event.pos())
 
     def minimumSizeHint(self):
@@ -176,16 +209,29 @@ class OpenGLWidget(QOpenGLWidget):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
+    def zoom_animation(self):
+        self.view_transition += 0.08
+        if self.view_transition >= 1:
+            self.zoom_animation_timer.stop()
+
+            # Reset state to have new matrix as the view matrix
+            self.view = QMatrix4x4(self.view_new)
+            self.view_transition = 0.0
+
+        self.update()
+
     def paintGL(self):
         gl = self.gl  # Shorthand
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         self.shader_program.bind()
 
-        self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('projection', self.projection)
         self.shader_program.setUniformValue('opacity', self.opacity)
         self.shader_program.setUniformValue('point_size', self.point_size)
+        self.shader_program.setUniformValue('view', self.view)
+        self.shader_program.setUniformValue('view_new', self.view_new)
+        self.shader_program.setUniformValue('f_view_transition', float(self.view_transition))
 
         if self.datasets_view is not None:
             self.datasets_view.draw(self)
@@ -209,7 +255,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.gl.glViewport(0, 0, w, h)
 
     def setClearColor(self, c):
-        self.gl.glClearColor(c.redF(), c.greenF(), c.blueF(), c.alphaF())
+        self.gl.glClearColor(c.redF(), c.greenF(), c.blueF(), c.view_transitionF())
 
     def setColor(self, c):
-        self.gl.glColor4f(c.redF(), c.greenF(), c.blueF(), c.alphaF())
+        self.gl.glColor4f(c.redF(), c.greenF(), c.blueF(), c.view_transitionF())

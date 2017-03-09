@@ -5,11 +5,14 @@ from PyQt5.QtCore import *
 import os
 import numpy as np
 
+from model.dataset import Selection
+
 
 class DatasetsView:
 
     def __init__(self):
         self._viewed_datasets = dict()
+        self.shader_program = None
 
     def add_dataset(self, dataset, kind):
         self._viewed_datasets[dataset] = {
@@ -20,6 +23,54 @@ class DatasetsView:
 
     def datasets(self):
         return [dataset for dataset in self._viewed_datasets.keys()]
+
+    def get_bounds(self):
+        datasets = self.datasets()
+        assert(all([dataset.m == 3 for dataset in datasets]))
+
+        x_min = np.inf
+        x_max = -np.inf
+        y_min = np.inf
+        y_max = -np.inf
+        for dataset in datasets:
+            x_min = min(x_min, dataset.data()[:, 0].min())
+            x_max = max(x_max, dataset.data()[:, 0].max())
+            y_min = min(y_min, dataset.data()[:, 1].min())
+            y_max = max(y_max, dataset.data()[:, 1].max())
+        return x_min, x_max, y_min, y_max
+
+    def filter_unseen_points(self, projection_view):
+        projection_view = np.array(projection_view.data()).reshape((4, 4))
+
+        # Delete z-entries in transformation matrix (it's 2D, not 3D).
+        projection_view = np.delete(projection_view, 2, axis=0)
+        projection_view = np.delete(projection_view, 2, axis=1)
+
+        visibles = []
+        invisibles = []
+
+        for dataset in self.datasets():
+            N = dataset.N
+            X = dataset.data()[:, :2]
+            X = np.concatenate((X, np.ones((N, 1))), axis=1)
+            Y = X.dot(projection_view)
+
+            Y_visible = np.abs(Y).max(axis=1) <= 1
+            visible_idcs = np.where(Y_visible == True)[0]
+            invisible_idcs = np.where(Y_visible == False)[0]
+
+            # Only make new dataset if it's non-empty and a proper subset of Y
+            if visible_idcs.shape[0] > 0 and visible_idcs.shape[0] < Y.shape[0]:
+                visible_selection = Selection('Se({})'.format(dataset.name()), parent=dataset, idcs=visible_idcs, hidden=dataset.hidden_features())
+                invisible_selection = Selection('Se({})'.format(dataset.name()), parent=dataset, idcs=invisible_idcs, hidden=dataset.hidden_features())
+                
+                dataset.add_child(visible_selection)
+                dataset.add_child(invisible_selection)
+                
+                visibles.append(visible_selection)
+                invisibles.append(invisible_selection)
+
+        return visibles, invisibles
 
     def make_vbo(self, dataset, dim, normalize=False):
         X_32 = np.array(dataset.data()[:, dim], dtype=np.float32)
@@ -52,6 +103,8 @@ class DatasetsView:
                 viewed_dataset['vbos'][dim] = self.make_vbo(dataset, dim)
 
     def enable_attributes(self, shader_program, gl):
+        self.shader_program = shader_program
+
         for dataset, viewed_dataset in self._viewed_datasets.items():
             vao = self.make_vao()
             viewed_dataset['vao'] = vao
@@ -96,18 +149,20 @@ class DatasetsView:
             gl.glDrawArrays(gl.GL_POINTS, 0, dataset.N)
             vao.release()
 
-    def disable_attributes(self, shader_program):
+    def disable_attributes(self):
         for dataset, viewed_dataset in self._viewed_datasets.items():
             vao = viewed_dataset['vao']
 
             vao.bind()
 
             for attribute in ['position_x', 'position_y', 'color']:
-                shader_program.disableAttributeArray(attribute)
+                self.shader_program.disableAttributeArray(attribute)
 
             vao.release()
 
     def destroy(self):
+        if self.shader_program is not None:
+            self.disable_attributes()
         for viewed_dataset in self._viewed_datasets.values():
             for vbo in viewed_dataset['vbos'].values():
                 vbo.destroy()

@@ -80,8 +80,8 @@ class DatasetsWidget(QGroupBox):
         datasets_view = DatasetsView()
 
         datasets_view.add_dataset(dataset, 'regular')
-        dummy = Dataset('dummy', None, np.array([[0, 0, 0.2], [1, 0, 0.4], [0, 1, 0.6], [1, 1, 0.8]]), hidden=1)
-        datasets_view.add_dataset(dummy, 'representatives')
+        # dummy = Dataset('dummy', None, np.array([[-1, 0, 0.2], [5, 0, 0.4], [0, 1, 0.6], [1, 3, 0.8]]), hidden=1)
+        # datasets_view.add_dataset(dummy, 'representatives')
 
         self.imp_app.gl_widget.set_datasets_view(datasets_view)
 
@@ -101,13 +101,8 @@ class DatasetsWidget(QGroupBox):
         self._workers.remove(reader)
 
     @pyqtSlot(object)
-    def add_dataset(self, dataset, operator=None):
-        if not isinstance(dataset, Dataset):
-            for d in dataset:
-                self.add_dataset(d, operator)
-            return
-        # Connect the dataset's s.t. when it has an embedding, that it adds it here.
-        dataset.operation_finished.connect(self.add_dataset)
+    def add_dataset(self, dataset):
+        dataset.has_new_child.connect(self.add_dataset)
 
         dataset_item = DatasetItem(dataset.name())
         dataset_item.setData(dataset, role=Qt.UserRole)
@@ -139,8 +134,8 @@ class DatasetsWidget(QGroupBox):
         self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
 
     def remove_dataset(self, dataset):
-        if dataset == self.imp_app.visuals_widget.current_dataset():
-            self.imp_app.visuals_widget.clear_attributes()
+        if dataset in self.imp_app.gl_widget.datasets_view.datasets():
+            self.imp_app.gl_widget.clear_datasets_view()
 
         dataset.destroy()
         if dataset.parent() is not None:

@@ -9,7 +9,7 @@ import numpy as np
 class Dataset(QObject):
 
     # Emitted when (child) embedding is finished
-    operation_finished = pyqtSignal(object, object)
+    has_new_child = pyqtSignal(object)
 
     def __init__(self, name, parent, X, hidden=0):
         super().__init__()
@@ -55,8 +55,9 @@ class Dataset(QObject):
     def child_count(self):
         return len(self._children)
 
-    def append_child(self, child):
+    def add_child(self, child):
         self._children.append(child)
+        self.has_new_child.emit(child)
 
     def remove_child(self, child):
         self._children.remove(child)
@@ -93,11 +94,9 @@ class Dataset(QObject):
 
         if type(result) == tuple:
             for child in result:
-                child.parent().append_child(child)
+                child.parent().add_child(child)
         else:
-            result.parent().append_child(result)
-        
-        self.operation_finished.emit(result, operator)
+            result.parent().add_child(result)
 
     def normalize(self):
         Y = self.data()[:, :-self.hidden_features()].copy()
