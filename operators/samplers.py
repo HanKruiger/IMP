@@ -40,7 +40,7 @@ class Sampler(Operator):
         try:
             if self.input()['sibling'] is not None:
                 in_sibling = self.input()['sibling']
-                assert(in_sibling.N == in_dataset.N)
+                assert(in_sibling.n_points() == in_dataset.n_points())
                 out_sibling = Sampling('S({})'.format(in_sibling.name()), parent=in_sibling, idcs=idcs, hidden=in_sibling.hidden_features())
                 self.set_outputs([out_dataset, out_sibling])
             else:

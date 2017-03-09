@@ -3,8 +3,8 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
-from operators.selectors import LenseSelector
-from model.dataset import Embedding
+from model.dataset import Embedding, Union, RootSelection
+from operators.utils import knn_fetch
 
 class OpenGLWidget(QOpenGLWidget):
 
@@ -33,8 +33,6 @@ class OpenGLWidget(QOpenGLWidget):
         self.zoom_animation_timer = QTimer()
         self.zoom_animation_timer.timeout.connect(self.zoom_animation)
 
-        self.N = 0
-
     def init_shaders(self, vertex_shader='shaders/points/vertex.glsl', fragment_shader='shaders/points/fragment.glsl'):
         self.shader_program = QOpenGLShaderProgram(self)
 
@@ -49,9 +47,6 @@ class OpenGLWidget(QOpenGLWidget):
     def init_vao(self):
         self.vao = QOpenGLVertexArrayObject()
         self.vao.create()
-
-    def clear(self):
-        pass
 
     def clear_datasets_view(self):
         if self.datasets_view is not None:
@@ -76,11 +71,17 @@ class OpenGLWidget(QOpenGLWidget):
         # Compute the center of the all-enclosing square, and the distance from center to its sides.
         center = QVector2D((x_min + x_max) / 2, (y_min + y_max) / 2)
         dist_to_sides = 0.5 * max(x_max - x_min, y_max - y_min)
+        
+        # To account for points that are almost exactly at the border, we need a small
+        # tolerance value. (Can also be seen as (very small) padding.)
+        tolerance = .2
+        dist_to_sides *= 1 + tolerance
 
         self.view.setToIdentity()
         self.view.scale(1 / dist_to_sides)
         self.view.translate(-center.x(), -center.y())
-        
+        self.view_new = QMatrix4x4(self.view)
+
         visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view)
         assert(len(invisibles) == 0)
 
@@ -123,11 +124,33 @@ class OpenGLWidget(QOpenGLWidget):
         self.view_new.scale(factor)
         
         if factor > 1:
-            self.datasets_view.filter_unseen_points(self.projection * self.view)
+            visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
+            if len(visibles) > 0:
+                while len(visibles) > 1:
+                    d1 = visibles.pop(0)
+                    d2 = visibles[0]
+                    visibles[0] = Union('Union({}, {})'.format(d1.name(), d2.name()), d1, d2, hidden=d1.hidden_features())
+                visibles = visibles[0]
+            else:
+                visibles = None
+            if len(invisibles) > 0:
+                while len(invisibles) > 1:
+                    d1 = invisibles.pop(0)
+                    d2 = invisibles[0]
+                    invisibles[0] = Union('Union({}, {})'.format(d1.name(), d2.name()), d1, d2, hidden=d1.hidden_features())
+                invisibles = invisibles[0]
+            else:
+                invisibles = None
 
-        if not self.zoom_animation_timer.isActive():
-            self.view_transition = 0.0
-            self.zoom_animation_timer.start(20)
+            nd_visibles = RootSelection(visibles)
+            new_neighbours = knn_fetch(nd_visibles, visibles.root(), invisibles.n_points())
+
+            print(visibles)
+            print(invisibles)
+
+
+        self.view_transition = 0.0
+        self.zoom_animation_timer.start(20)
 
     def pixel_to_world(self, p_in, d=2):
         try:
@@ -186,6 +209,11 @@ class OpenGLWidget(QOpenGLWidget):
             wheel_event.ignore()
             return
         wheel_event.accept()
+
+        # Don't zoom if already zooming. (But do accept the event!)
+        if self.zoom_animation_timer.isActive():
+            return
+
         factor = 1.1 ** wheel_event.pixelDelta().y()
         self.zoom(factor, wheel_event.pos())
 

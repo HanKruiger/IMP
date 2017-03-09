@@ -11,8 +11,6 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import pdist
 
-from functools import reduce
-
 class HypersphereFetcher(Operator):
 
     def __init__(self):
@@ -81,14 +79,14 @@ class KNNFetcher(Operator):
         query_2d = self.input()['query_2d']
 
         N_max = self.parameters()['N_max']
-        N_fetch = N_max - query_nd.N
+        N_fetch = N_max - query_nd.n_points()
 
         # Hide the hidden features
         X_query_use, X_query_hidden = Operator.hide_features(query_nd.data(), query_nd.hidden_features())
         Y_query_use, Y_query_hidden = Operator.hide_features(query_2d.data(), query_2d.hidden_features())
 
         # Remove points in X_query_use from X_use, because we don't want the same points as the query.
-        dataset_no_query_idcs = np.delete(np.arange(nd_dataset.N), query_nd.indices(), axis=0)
+        dataset_no_query_idcs = np.delete(np.arange(nd_dataset.n_points()), query_nd.indices(), axis=0)
         nd_dataset_noquery = Selection('S_m({})'.format(nd_dataset.name), nd_dataset, idcs=dataset_no_query_idcs, hidden=nd_dataset.hidden_features())
         
         X_use, X_hidden = Operator.hide_features(nd_dataset_noquery.data(), nd_dataset_noquery.hidden_features())

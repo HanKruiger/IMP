@@ -80,8 +80,6 @@ class DatasetsWidget(QGroupBox):
         datasets_view = DatasetsView()
 
         datasets_view.add_dataset(dataset, 'regular')
-        # dummy = Dataset('dummy', None, np.array([[-1, 0, 0.2], [5, 0, 0.4], [0, 1, 0.6], [1, 3, 0.8]]), hidden=1)
-        # datasets_view.add_dataset(dummy, 'representatives')
 
         self.imp_app.gl_widget.set_datasets_view(datasets_view)
 
@@ -107,9 +105,9 @@ class DatasetsWidget(QGroupBox):
         dataset_item = DatasetItem(dataset.name())
         dataset_item.setData(dataset, role=Qt.UserRole)
 
-        N_item = QStandardItem(str(dataset.N))
+        N_item = QStandardItem(str(dataset.n_points()))
         N_item.setEditable(False)
-        m_item = QStandardItem(str(dataset.m))
+        m_item = QStandardItem(str(dataset.n_dimensions()))
         m_item.setEditable(False)
         rel_item = QStandardItem(type(dataset).__name__)
         rel_item.setEditable(False)

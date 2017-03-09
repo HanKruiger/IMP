@@ -18,7 +18,7 @@ class HorizontalConcat(Operator):
         in_dataset_1 = self.input()['parent']
         in_dataset_2 = self.input()['source']
 
-        assert(in_dataset_1.N == in_dataset_2.N)
+        assert(in_dataset_1.n_points() == in_dataset_2.n_points())
         
         Y = np.column_stack([in_dataset_1.data(), in_dataset_2.data()])
         

@@ -27,8 +27,8 @@ class Reader(Operator):
             out_datasets.append(dataset)
 
         # Auto-HorzCat labels (may have unintended side-effects, but w/e. Yay for faster testing.)
-        if len(out_datasets) == 2 and any([dataset.m == 1 for dataset in out_datasets]) and out_datasets[0].N == out_datasets[1].N:
-            if out_datasets[1].m == 1:
+        if len(out_datasets) == 2 and any([dataset.n_dimensions() == 1 for dataset in out_datasets]) and out_datasets[0].n_points() == out_datasets[1].n_points():
+            if out_datasets[1].n_dimensions() == 1:
                 labels = 1
                 data = 0
             else:

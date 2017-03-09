@@ -11,8 +11,11 @@ class Dataset(QObject):
     # Emitted when (child) embedding is finished
     has_new_child = pyqtSignal(object)
 
-    def __init__(self, name, parent, X, hidden=0):
+    def __init__(self, name, parent, X, hidden=None):
         super().__init__()
+        if hidden is None:
+            hidden = parent.hidden_features()
+
         self._name = name
         self._parent = parent
         self._n_hidden_features = hidden
@@ -23,11 +26,15 @@ class Dataset(QObject):
 
         if X is not None:
             self._X = X
-            self.N = X.shape[0]
-            if len(X.shape) < 2:
-                self.m = 1
-            else:
-                self.m = X.shape[1]
+
+    def n_points(self):
+        return self.data().shape[0]
+
+    def n_dimensions(self):
+        if len(self.data().shape) < 2:
+            return 1
+        else:
+            return self.data().shape[1]
 
     def name(self):
         return self._name
@@ -70,9 +77,9 @@ class Dataset(QObject):
 
     def indices(self):
         if self.parent() is not None:
-            return parent().indices()
+            return self.parent().indices()
         else:
-            return np.arange(self.N)
+            return np.arange(self.n_points())
 
     def hidden_features(self):
         return self._n_hidden_features
@@ -139,7 +146,7 @@ class DatasetItem(QStandardItem):
 
 class InputDataset(Dataset):
 
-    def __init__(self, name, X, hidden=0):
+    def __init__(self, name, X, hidden=None):
         super().__init__(name, None, X, hidden=hidden)
 
     def root(self):
@@ -151,7 +158,7 @@ class InputDataset(Dataset):
 
 class Clustering(Dataset):
 
-    def __init__(self, name, parent, X, support, hidden=0):
+    def __init__(self, name, parent, X, support, hidden=None):
         super().__init__(name, parent, X, hidden=hidden)
         self._support = support
 
@@ -161,7 +168,7 @@ class Clustering(Dataset):
 
 class Embedding(Dataset):
 
-    def __init__(self, name, parent, X, hidden=0):
+    def __init__(self, name, parent, X, hidden=None):
         super().__init__(name, parent, X, hidden=hidden)
 
     def root(self):
@@ -170,12 +177,11 @@ class Embedding(Dataset):
     def root_data(self):
         return self.parent().root_data()
 
+
 class Selection(Dataset):
 
-    def __init__(self, name, parent, idcs, hidden=0):
+    def __init__(self, name, parent, idcs, hidden=None):
         self._idcs = idcs
-        self.m = parent.m
-        self.N = len(idcs)
         super().__init__(name, parent, None, hidden=hidden)
 
     def data(self):
@@ -198,7 +204,7 @@ class Selection(Dataset):
 
 class Sampling(Selection):
 
-    def __init__(self, name, parent, idcs, hidden=0):
+    def __init__(self, name, parent, idcs, hidden=None):
         super().__init__(name, parent, idcs, hidden=hidden)
 
     def set_support(self, support):
@@ -207,9 +213,10 @@ class Sampling(Selection):
     def support(self):
         return self._support
 
+
 class Merging(Dataset):
 
-    def __init__(self, name, parent, X, hidden=0):
+    def __init__(self, name, parent, X, hidden=None):
         super().__init__(name, parent, X, hidden=hidden)
 
     def root(self):
@@ -217,3 +224,48 @@ class Merging(Dataset):
 
     def root_data(self):
         return self.data()
+
+
+class Union(Dataset):
+
+    def __init__(self, parent_1, parent_2, name=None, hidden=None):
+        if name is None:
+            name = 'Union({}, {})'.format(parent_1.name(), parent_2.name())
+        self._parent_1 = parent_1
+        self._parent_2 = parent_2
+
+        unique_indices = np.union1d(parent_1.indices(), parent_1.indices())
+        self._idcs = unique_indices
+
+        # Use parent_1 as the legal parent
+        super().__init__(name, parent_1, None, hidden=hidden)
+
+    def indices(self):
+        return self._idcs.copy()
+
+    def parent(self):
+        return self._parent_1
+
+    def data(self):
+        return np.concatenate((self._parent_1.data(), self._parent_2.data()), axis=0)
+
+    def root(self):
+        assert(self._parent_1.root() == self._parent_2.root())
+        return self.parent().root()
+
+    def root_data(self):
+        return self.root().data()[self.indices(), :]
+
+    def destroy(self):
+        del self._idcs
+        if self._parent is not None:
+            self._parent.remove_child(self)
+
+class RootSelection(Selection):
+
+    def __init__(self, selection, hidden=None):
+        if hidden is None:
+            hidden = selection.hidden_features()
+        parent = selection.root()
+        idcs = selection.indices()
+        super().__init__(name='RS({})'.format(selection.name()), parent=parent, idcs=idcs, hidden=hidden)

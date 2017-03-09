@@ -26,7 +26,7 @@ class DatasetsView:
 
     def get_bounds(self):
         datasets = self.datasets()
-        assert(all([dataset.m == 3 for dataset in datasets]))
+        assert(all([dataset.n_dimensions() == 3 for dataset in datasets]))
 
         x_min = np.inf
         x_max = -np.inf
@@ -50,7 +50,7 @@ class DatasetsView:
         invisibles = []
 
         for dataset in self.datasets():
-            N = dataset.N
+            N = dataset.n_points()
             X = dataset.data()[:, :2]
             X = np.concatenate((X, np.ones((N, 1))), axis=1)
             Y = X.dot(projection_view)
@@ -95,11 +95,11 @@ class DatasetsView:
 
     def init_vaos_and_buffers(self):
         for dataset, viewed_dataset in self._viewed_datasets.items():
-            assert(dataset.m == 3) # for now?
+            assert(dataset.n_dimensions() == 3) # for now?
 
             viewed_dataset['vao'] = self.make_vao()
 
-            for dim in range(dataset.m):
+            for dim in range(dataset.n_dimensions()):
                 viewed_dataset['vbos'][dim] = self.make_vbo(dataset, dim)
 
     def enable_attributes(self, shader_program, gl):
@@ -111,11 +111,11 @@ class DatasetsView:
 
             vao.bind()
 
-            for dim in range(dataset.m):
+            for dim in range(dataset.n_dimensions()):
                 vbo = self.make_vbo(dataset, dim)
                 viewed_dataset['vbos'][dim] = vbo
 
-            for attribute, vbo in zip(['position_x', 'position_y', 'color'], [viewed_dataset['vbos'][dim] for dim in range(dataset.m)]):
+            for attribute, vbo in zip(['position_x', 'position_y', 'color'], [viewed_dataset['vbos'][dim] for dim in range(dataset.n_dimensions())]):
                 attrib_loc = shader_program.attributeLocation(attribute)
 
                 shader_program.enableAttributeArray(attrib_loc)
@@ -146,7 +146,7 @@ class DatasetsView:
                 shader_program.setUniformValue('point_size', 1.5*gl_widget.point_size)
             vao = viewed_dataset['vao']
             vao.bind()
-            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.N)
+            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
             vao.release()
 
     def disable_attributes(self):
