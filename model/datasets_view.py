@@ -59,15 +59,12 @@ class DatasetsView:
             visible_idcs = np.where(Y_visible == True)[0]
             invisible_idcs = np.where(Y_visible == False)[0]
 
-            # Only make new dataset if it's non-empty and a proper subset of Y
-            if visible_idcs.shape[0] > 0 and visible_idcs.shape[0] < Y.shape[0]:
-                visible_selection = Selection('Se({})'.format(dataset.name()), parent=dataset, idcs=visible_idcs, hidden=dataset.hidden_features())
-                invisible_selection = Selection('Se({})'.format(dataset.name()), parent=dataset, idcs=invisible_idcs, hidden=dataset.hidden_features())
-                
-                dataset.add_child(visible_selection)
-                dataset.add_child(invisible_selection)
-                
+            # Only make new dataset if it's non-empty.
+            if visible_idcs.shape[0] > 0:
+                visible_selection = Selection(dataset, visible_idcs)
                 visibles.append(visible_selection)
+            if invisible_idcs.shape[0] > 0:
+                invisible_selection = Selection(dataset, invisible_idcs)
                 invisibles.append(invisible_selection)
 
         return visibles, invisibles

@@ -27,6 +27,9 @@ class Dataset(QObject):
         if X is not None:
             self._X = X
 
+        if parent is not None:
+            parent.add_child(self)
+
     def n_points(self):
         return self.data().shape[0]
 
@@ -95,15 +98,7 @@ class Dataset(QObject):
 
     @pyqtSlot(object)
     def handle_operator_results(self, operator):
-        # Fetch data from worker, and delete it
-        result = operator.output()
         self._workers.remove(operator)  # Your services are no longer needed.
-
-        if type(result) == tuple:
-            for child in result:
-                child.parent().add_child(child)
-        else:
-            result.parent().add_child(result)
 
     def normalize(self):
         Y = self.data()[:, :-self.hidden_features()].copy()
@@ -180,7 +175,9 @@ class Embedding(Dataset):
 
 class Selection(Dataset):
 
-    def __init__(self, name, parent, idcs, hidden=None):
+    def __init__(self, parent, idcs, name=None, hidden=None):
+        if name is None:
+            name = 'S({})'.format(parent.name())
         self._idcs = idcs
         super().__init__(name, parent, None, hidden=hidden)
 
@@ -204,8 +201,10 @@ class Selection(Dataset):
 
 class Sampling(Selection):
 
-    def __init__(self, name, parent, idcs, hidden=None):
-        super().__init__(name, parent, idcs, hidden=hidden)
+    def __init__(self, parent, idcs, name=None, hidden=None):
+        if name is None:
+            name = 'Sa({})'.format(parent.name())
+        super().__init__(parent, idcs, name=name, hidden=hidden)
 
     def set_support(self, support):
         self._support = support
@@ -213,11 +212,23 @@ class Sampling(Selection):
     def support(self):
         return self._support
 
+class Fetching(Selection):
+
+    def __init__(self, parent_1, parent_2, idcs, name=None, hidden=None):
+        if name is None:
+            name = 'F({}, {})'.format(parent_1.name(), parent_2.name())
+        if hidden is None:
+            hidden = parent_1.hidden_features()
+        super().__init__(parent_1, idcs, name=name, hidden=hidden)
 
 class Merging(Dataset):
 
-    def __init__(self, name, parent, X, hidden=None):
-        super().__init__(name, parent, X, hidden=hidden)
+    def __init__(self, parent_1, parent_2, X, name=None, hidden=None):
+        if name is None:
+            name = 'M({}, {})'.format(parent_1.name(), parent_2.name())
+        if hidden is None:
+            hidden = parent_2.n_dimensions()
+        super().__init__(name, parent_1, X, hidden=hidden)
 
     def root(self):
         return self
@@ -242,9 +253,6 @@ class Union(Dataset):
 
     def indices(self):
         return self._idcs.copy()
-
-    def parent(self):
-        return self._parent_1
 
     def data(self):
         return np.concatenate((self._parent_1.data(), self._parent_2.data()), axis=0)

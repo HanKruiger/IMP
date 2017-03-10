@@ -24,9 +24,9 @@ class HorizontalConcat(Operator):
         
         hidden = in_dataset_1.hidden_features()
         if self.parameters()['add_as_hidden']:
-            hidden += in_dataset_2.m
+            hidden += in_dataset_2.n_dimensions()
 
-        out_dataset = Merging(in_dataset_1.name(), in_dataset_1, Y, hidden=hidden)
+        out_dataset = Merging(in_dataset_1, in_dataset_2, Y, hidden=hidden)
         self.set_output(out_dataset)
 
     @classmethod

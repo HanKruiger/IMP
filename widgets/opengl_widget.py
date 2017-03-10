@@ -125,11 +125,13 @@ class OpenGLWidget(QOpenGLWidget):
         
         if factor > 1:
             visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
+            print(visibles)
+            print(invisibles)
             if len(visibles) > 0:
                 while len(visibles) > 1:
                     d1 = visibles.pop(0)
                     d2 = visibles[0]
-                    visibles[0] = Union('Union({}, {})'.format(d1.name(), d2.name()), d1, d2, hidden=d1.hidden_features())
+                    visibles[0] = Union(d1, d2)
                 visibles = visibles[0]
             else:
                 visibles = None
@@ -137,17 +139,14 @@ class OpenGLWidget(QOpenGLWidget):
                 while len(invisibles) > 1:
                     d1 = invisibles.pop(0)
                     d2 = invisibles[0]
-                    invisibles[0] = Union('Union({}, {})'.format(d1.name(), d2.name()), d1, d2, hidden=d1.hidden_features())
+                    invisibles[0] = Union(d1, d2)
                 invisibles = invisibles[0]
             else:
                 invisibles = None
 
-            nd_visibles = RootSelection(visibles)
-            new_neighbours = knn_fetch(nd_visibles, visibles.root(), invisibles.n_points())
-
-            print(visibles)
-            print(invisibles)
-
+            if visibles is not None and invisibles is not None:
+                nd_visibles = RootSelection(visibles)
+                new_neighbours = knn_fetch(nd_visibles, visibles.root(), invisibles.n_points())
 
         self.view_transition = 0.0
         self.zoom_animation_timer.start(20)

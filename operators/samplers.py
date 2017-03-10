@@ -28,7 +28,7 @@ class Sampler(Operator):
 
         idcs = self.sample(X_use)
 
-        out_dataset = Sampling('S({})'.format(in_dataset.name()), parent=in_dataset, idcs=idcs, hidden=n_hidden_features)
+        out_dataset = Sampling(in_dataset, idcs)
         
         try:
             if self.parameters()['save_support']:
@@ -37,16 +37,7 @@ class Sampler(Operator):
         except KeyError:
             pass
 
-        try:
-            if self.input()['sibling'] is not None:
-                in_sibling = self.input()['sibling']
-                assert(in_sibling.n_points() == in_dataset.n_points())
-                out_sibling = Sampling('S({})'.format(in_sibling.name()), parent=in_sibling, idcs=idcs, hidden=in_sibling.hidden_features())
-                self.set_outputs([out_dataset, out_sibling])
-            else:
-                self.set_output(out_dataset)
-        except KeyError:
-            self.set_output(out_dataset)
+        self.set_output(out_dataset)
 
     @abc.abstractmethod
     def sample(self, X):
