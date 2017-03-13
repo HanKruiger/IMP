@@ -6,7 +6,7 @@ import abc
 
 import numpy as np
 
-from model.dataset import Dataset, Sampling
+from model.dataset import Dataset
 from operators.operator import Operator
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.linalg import svds

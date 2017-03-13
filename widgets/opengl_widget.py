@@ -3,7 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
-from model.dataset import Embedding, Union, RootSelection
+from model.dataset import *
 from operators.utils import knn_fetch
 
 class OpenGLWidget(QOpenGLWidget):
@@ -82,9 +82,6 @@ class OpenGLWidget(QOpenGLWidget):
         self.view.translate(-center.x(), -center.y())
         self.view_new = QMatrix4x4(self.view)
 
-        visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view)
-        assert(len(invisibles) == 0)
-
         self.update()
 
     def set_attribute(self, vbo, dim, N, m, attribute):
@@ -145,8 +142,9 @@ class OpenGLWidget(QOpenGLWidget):
                 invisibles = None
 
             if visibles is not None and invisibles is not None:
-                nd_visibles = RootSelection(visibles)
-                new_neighbours = knn_fetch(nd_visibles, visibles.root(), invisibles.n_points())
+                # nd_visibles = RootSelection(visibles)
+                # new_neighbours = KNNFetching(nd_visibles, visibles.root(), invisibles.n_points())
+                new_neighbours = KNNFetching(visibles, invisibles.n_points())
 
         self.view_transition = 0.0
         self.zoom_animation_timer.start(20)
@@ -213,7 +211,7 @@ class OpenGLWidget(QOpenGLWidget):
         if self.zoom_animation_timer.isActive():
             return
 
-        factor = 1.1 ** wheel_event.pixelDelta().y()
+        factor = 1.05 ** wheel_event.pixelDelta().y()
         self.zoom(factor, wheel_event.pos())
 
     def minimumSizeHint(self):

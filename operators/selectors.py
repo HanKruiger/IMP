@@ -7,7 +7,7 @@ import abc
 import numpy as np
 
 from widgets.gl_entities.lense import Lense
-from model.dataset import Dataset, Selection, Embedding
+from model.dataset import *
 from operators.operator import Operator
 
 class LenseSelector(Operator):

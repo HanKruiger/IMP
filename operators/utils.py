@@ -1,23 +1,34 @@
 import numpy as np
 
-from operators.operator import Operator
-from model.dataset import *
 import abc
 import os
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import pdist
 
+def hide_features(X, n_hidden_features):
+    if n_hidden_features == 0:
+        return X, np.empty(shape=(X.shape[0], 0))
+    n_features = X.shape[1] - n_hidden_features
+
+    # Filter out the subset of features that can be used.
+    X_use = X[:, :n_features]
+
+    # Filter out the subset that cannot be used (because hidden!).
+    X_hidden = X[:, -n_hidden_features:]
+    
+    return X_use, X_hidden
+
 # Return a dataset that contains the k 
 def knn_fetch(query_nd, nd_dataset, k):
     print('KNNFetch, k = {}:'.format(k))
 
     # Hide the hidden features
-    X_query_use, X_query_hidden = Operator.hide_features(query_nd.data(), query_nd.hidden_features())
+    X_query_use, X_query_hidden = hide_features(query_nd.data(), query_nd.hidden_features())
 
     # Remove points in X_query_use from X_use, because we don't want the same points as the query.
     dataset_no_query_idcs = np.delete(np.arange(nd_dataset.n_points()), query_nd.indices(), axis=0)
-    X_use, X_hidden = Operator.hide_features(nd_dataset.data()[dataset_no_query_idcs, :], nd_dataset.hidden_features())
+    X_use, X_hidden = hide_features(nd_dataset.data()[dataset_no_query_idcs, :], nd_dataset.hidden_features())
     print(X_use.shape)
 
     # Find the point in the 2d selection closest to the center (cursor)
@@ -59,5 +70,7 @@ def knn_fetch(query_nd, nd_dataset, k):
 
     X_knn = np.concatenate([X_knn, query_nd.indices()])
 
-    out_dataset = Fetching(nd_dataset, query_nd, X_knn)
-    return out_dataset
+    return X_knn
+
+    # out_dataset = Fetching(nd_dataset, query_nd, X_knn)
+    # return out_dataset

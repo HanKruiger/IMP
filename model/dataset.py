@@ -4,14 +4,19 @@ from PyQt5.QtCore import *
 
 import os
 import numpy as np
-
+from functools import partial
+from operators.utils import *
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 class Dataset(QObject):
 
     # Emitted when (child) embedding is finished
     has_new_child = pyqtSignal(object)
+    data_ready = pyqtSignal(object)
+    ready = pyqtSignal()
 
-    def __init__(self, name, parent, X, hidden=None):
+    def __init__(self, name, parent, data, hidden=None):
         super().__init__()
         if hidden is None:
             hidden = parent.hidden_features()
@@ -24,16 +29,19 @@ class Dataset(QObject):
         self._children = []
         self._q_item = None
 
-        if X is not None:
-            self._X = X
+        self._data = data
 
         if parent is not None:
             parent.add_child(self)
 
     def n_points(self):
+        if self.data() is None:
+            return 'NA'
         return self.data().shape[0]
 
     def n_dimensions(self):
+        if self.data() is None:
+            return 'NA'
         if len(self.data().shape) < 2:
             return 1
         else:
@@ -46,7 +54,7 @@ class Dataset(QObject):
         self._name = name
 
     def destroy(self):
-        del self._X
+        del self._data
         if self._parent is not None:
             self._parent.remove_child(self)
 
@@ -58,6 +66,11 @@ class Dataset(QObject):
 
     def set_q_item(self, q_item):
         self._q_item = q_item
+
+    def data_changed(self):
+        self.q_item().emitDataChanged()
+        self.data_ready.emit(self)
+        self.ready.emit()
 
     def child(self, idx):
         return self._children[idx]
@@ -72,11 +85,19 @@ class Dataset(QObject):
     def remove_child(self, child):
         self._children.remove(child)
 
-    def is_clustering(self):
-        return self._is_clustering
-
     def data(self):
-        return self._X
+        return self._data
+
+    @pyqtSlot(object)
+    def set_data(self, data):
+        self._data = data
+        self.data_changed()
+
+    def data_is_ready(self):
+        if len(self._workers) == 0:
+            self.ready.emit()
+            return True
+        return False
 
     def indices(self):
         if self.parent() is not None:
@@ -87,18 +108,30 @@ class Dataset(QObject):
     def hidden_features(self):
         return self._n_hidden_features
 
-    def perform_operation(self, operator):
-        # Somehow I need this local function...
-        def handle_results(op):
-            self.handle_operator_results(op)
-        operator.has_results.connect(handle_results)
+    def spawn_thread(self, worker, callback, waitfor=None):
+        thread = QThread()
+        worker.moveToThread(thread)
 
-        operator.start()
-        self._workers.add(operator)
+        # Save references
+        self._workers.add((worker, thread))
 
-    @pyqtSlot(object)
-    def handle_operator_results(self, operator):
-        self._workers.remove(operator)  # Your services are no longer needed.
+        thread.started.connect(worker.work)
+        worker.ready.connect(thread.quit)
+        worker.ready.connect(callback)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+
+        # Clean up references
+        thread.finished.connect(partial(self._workers.remove, (worker, thread)))
+
+        if waitfor:
+            if waitfor.data_is_ready():
+                thread.start()
+            else:
+                waitfor.ready.connect(thread.start)
+        else:
+            thread.start()
+
 
     def normalize(self):
         Y = self.data()[:, :-self.hidden_features()].copy()
@@ -161,10 +194,40 @@ class Clustering(Dataset):
         return self._support
 
 
-class Embedding(Dataset):
+class TSNEEmbedding(Dataset):
 
-    def __init__(self, name, parent, X, hidden=None):
-        super().__init__(name, parent, X, hidden=hidden)
+    class TSNEEmbedder(QObject):
+
+        ready = pyqtSignal(object)
+
+        def __init__(self, parent, **parameters):
+            super().__init__()
+            self.parent = parent
+            self.parameters = parameters
+
+        def work(self):
+            # Hide hidden features
+            X_use, X_hidden = hide_features(self.parent.data(), self.parent.hidden_features())
+            
+            # t-SNE embedding
+            print(X_use.shape)
+            print(self.parameters)
+            tsne = TSNE(**self.parameters)
+            Y_use = tsne.fit_transform(X_use)
+
+            # Restore original hidden features
+            Y = np.concatenate((Y_use, X_hidden), axis=1)
+
+            self.ready.emit(Y)
+
+    def __init__(self, parent, name=None, hidden=None, **parameters):
+        if name is None:
+            name = 'E({})'.format(parent.name())
+        super().__init__(name, parent, data=None, hidden=hidden)
+
+        embedder = TSNEEmbedding.TSNEEmbedder(parent, **parameters)
+
+        self.spawn_thread(embedder, self.set_data, waitfor=parent)
 
     def root(self):
         return self.parent().root()
@@ -175,7 +238,7 @@ class Embedding(Dataset):
 
 class Selection(Dataset):
 
-    def __init__(self, parent, idcs, name=None, hidden=None):
+    def __init__(self, parent, idcs=None, name=None, hidden=None):
         if name is None:
             name = 'S({})'.format(parent.name())
         self._idcs = idcs
@@ -198,28 +261,66 @@ class Selection(Dataset):
         if self._parent is not None:
             self._parent.remove_child(self)
 
+    @pyqtSlot(object)
+    def set_indices(self, idcs):
+        self._idcs = idcs
+        self.data_changed()
 
-class Sampling(Selection):
+class RandomSampling(Selection):
 
-    def __init__(self, parent, idcs, name=None, hidden=None):
+    class RandomSampler(QObject):
+
+        ready = pyqtSignal(object)
+
+        def __init__(self, parent, n_samples):
+            super().__init__()
+            self.parent = parent
+            self.n_samples = n_samples
+
+        def work(self):
+            idcs = np.random.choice(self.parent.n_points(), self.n_samples, replace=False)
+            self.ready.emit(idcs)
+
+    def __init__(self, parent, n_samples, name=None, hidden=None):
         if name is None:
-            name = 'Sa({})'.format(parent.name())
-        super().__init__(parent, idcs, name=name, hidden=hidden)
+            name = 'RndS({})'.format(parent.name())
 
-    def set_support(self, support):
-        self._support = support
+        super().__init__(parent, idcs=None, name=name, hidden=hidden)
 
-    def support(self):
-        return self._support
+        sampler = RandomSampling.RandomSampler(parent, n_samples)
+        self.spawn_thread(sampler, self.set_indices, waitfor=parent)
+    
 
-class Fetching(Selection):
 
-    def __init__(self, parent_1, parent_2, idcs, name=None, hidden=None):
+class KNNFetching(Selection):
+
+    class KNNFetcher(QObject):
+
+        ready = pyqtSignal(object)
+
+        def __init__(self, query_nd, root, n_points):
+            super().__init__()
+            self.query_nd = query_nd
+            self.root = root
+            self.n_points = n_points
+
+        def work(self):
+            idcs = knn_fetch(self.query_nd, self.root, self.n_points)
+            self.ready.emit(idcs)
+
+    def __init__(self, query_2d, n_points, name=None, hidden=None):
+        root = query_2d.root()
         if name is None:
-            name = 'F({}, {})'.format(parent_1.name(), parent_2.name())
+            name = 'F({}, {})'.format(root.name(), query_2d.name())
         if hidden is None:
-            hidden = parent_1.hidden_features()
-        super().__init__(parent_1, idcs, name=name, hidden=hidden)
+            hidden = root.hidden_features()
+        super().__init__(root, idcs=None, name=name, hidden=hidden)
+        
+        query_nd = RootSelection(query_2d)
+
+        fetcher = KNNFetching.KNNFetcher(query_nd, root, n_points)
+        self.spawn_thread(fetcher, self.set_indices)
+
 
 class Merging(Dataset):
 
@@ -268,6 +369,7 @@ class Union(Dataset):
         del self._idcs
         if self._parent is not None:
             self._parent.remove_child(self)
+
 
 class RootSelection(Selection):
 

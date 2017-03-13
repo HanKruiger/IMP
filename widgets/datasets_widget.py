@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from model.dataset import DatasetItem, InputDataset, Selection, Embedding, Dataset
+from model.dataset import *
 from model.datasets_view import DatasetsView
 from operators.selectors import LenseSelector
 from operators.readers import Reader
@@ -18,7 +18,7 @@ class DatasetsWidget(QGroupBox):
         self.imp_app = imp_app
 
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(['Name', 'N', 'm', 'rel'])
+        self.model.setHorizontalHeaderLabels(['Name', 'N', 'm'])
         self.model.dataChanged.connect(self.data_changed)
 
         self.tree_view = QTreeView()
@@ -72,9 +72,22 @@ class DatasetsWidget(QGroupBox):
 
     def data_changed(self, topleft, bottomright, roles):
         dataset = self.model.data(topleft, role=Qt.UserRole)
-        new_name = self.model.data(topleft, role=Qt.DisplayRole)
 
+        # If there's no user role, it's not the right column.
+        if dataset is None:
+            return
+
+        # Read potentially new name from display role
+        new_name = self.model.data(topleft, role=Qt.DisplayRole)
         dataset.set_name(new_name)
+        
+        # Make new entries reflect new data dimensions/size
+        self.model.setData(
+            self.model.index(topleft.row(), 1, self.model.parent(topleft)), dataset.n_points()
+        )
+        self.model.setData(
+            self.model.index(topleft.row(), 2, self.model.parent(topleft)), dataset.n_dimensions()
+        )
 
     def show_dataset(self, dataset):
         datasets_view = DatasetsView()
@@ -96,6 +109,13 @@ class DatasetsWidget(QGroupBox):
         self.imp_app.statusBar().clearMessage()
         for dataset in reader.output():
             self.add_dataset(dataset)
+            if dataset.n_points() > 1000:
+                sampling = RandomSampling(dataset, 1000)
+                dataset = sampling
+
+            embedding = TSNEEmbedding(dataset, n_iter=200)
+            embedding.data_ready.connect(self.show_dataset)
+
         self._workers.remove(reader)
 
     @pyqtSlot(object)
@@ -109,18 +129,16 @@ class DatasetsWidget(QGroupBox):
         N_item.setEditable(False)
         m_item = QStandardItem(str(dataset.n_dimensions()))
         m_item.setEditable(False)
-        rel_item = QStandardItem(type(dataset).__name__)
-        rel_item.setEditable(False)
 
         if dataset.parent() is None:
             # Add it to the model's root node.
-            self.model.appendRow([dataset_item, N_item, m_item, rel_item])
+            self.model.appendRow([dataset_item, N_item, m_item])
         else:
             # Fetch the parent DatasetItem
             parent_item = dataset.parent().q_item()
 
             # Append the new dataset's row to the parent.
-            parent_item.appendRow([dataset_item, N_item, m_item, rel_item])
+            parent_item.appendRow([dataset_item, N_item, m_item])
 
             # Expand the parent. (This does not happen automatically)
             self.tree_view.expand(parent_item.index())
