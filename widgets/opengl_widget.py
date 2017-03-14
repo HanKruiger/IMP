@@ -3,7 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
-from model.dataset import *
+from model import *
 from operators.utils import knn_fetch
 
 class OpenGLWidget(QOpenGLWidget):
@@ -122,8 +122,6 @@ class OpenGLWidget(QOpenGLWidget):
         
         if factor > 1:
             visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
-            print(visibles)
-            print(invisibles)
             if len(visibles) > 0:
                 while len(visibles) > 1:
                     d1 = visibles.pop(0)
@@ -142,9 +140,10 @@ class OpenGLWidget(QOpenGLWidget):
                 invisibles = None
 
             if visibles is not None and invisibles is not None:
-                # nd_visibles = RootSelection(visibles)
-                # new_neighbours = KNNFetching(nd_visibles, visibles.root(), invisibles.n_points())
                 new_neighbours = KNNFetching(visibles, invisibles.n_points())
+                rs = RootSelection(visibles)
+                new_neighbours_embedding = PCAEmbedding(Union(rs, new_neighbours))
+                new_neighbours_embedding.data_ready.connect(self.imp_app.datasets_widget.show_dataset)
 
         self.view_transition = 0.0
         self.zoom_animation_timer.start(20)

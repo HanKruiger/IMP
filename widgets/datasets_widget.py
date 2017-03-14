@@ -3,11 +3,9 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from model.dataset import *
+from model.embeddings import *
 from model.datasets_view import DatasetsView
-from operators.selectors import LenseSelector
 from operators.readers import Reader
-from operators.hierarchical_zoom import HierarchicalZoom
-from widgets.operator_dialog import OperatorDialog
 
 import numpy as np
 
@@ -113,7 +111,8 @@ class DatasetsWidget(QGroupBox):
                 sampling = RandomSampling(dataset, 1000)
                 dataset = sampling
 
-            embedding = TSNEEmbedding(dataset, n_iter=200)
+            # embedding = TSNEEmbedding(dataset, n_iter=1500)
+            embedding = PCAEmbedding(dataset, n_components=2)
             embedding.data_ready.connect(self.show_dataset)
 
         self._workers.remove(reader)
@@ -169,10 +168,6 @@ class DatasetsWidget(QGroupBox):
 
         # Build menu, based on characteristics of Dataset object.
         menu = QMenu()
-
-        operator_dialog = OperatorDialog(self, dataset, self.imp_app)
-        operator_action = menu.addAction('Perform operation')
-        operator_action.triggered.connect(operator_dialog.show)
 
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')

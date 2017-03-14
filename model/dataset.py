@@ -9,6 +9,7 @@ from operators.utils import *
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
+
 class Dataset(QObject):
 
     # Emitted when (child) embedding is finished
@@ -31,17 +32,22 @@ class Dataset(QObject):
 
         self._data = data
 
+        if data is None:
+            self._is_ready = False
+        else:
+            self._is_ready = True
+
         if parent is not None:
             parent.add_child(self)
 
     def n_points(self):
         if self.data() is None:
-            return 'NA'
+            return None
         return self.data().shape[0]
 
     def n_dimensions(self):
         if self.data() is None:
-            return 'NA'
+            return None
         if len(self.data().shape) < 2:
             return 1
         else:
@@ -52,6 +58,9 @@ class Dataset(QObject):
 
     def set_name(self, name):
         self._name = name
+
+    def is_ready(self):
+        return self._is_ready
 
     def destroy(self):
         del self._data
@@ -69,6 +78,7 @@ class Dataset(QObject):
 
     def data_changed(self):
         self.q_item().emitDataChanged()
+        print('Emitting {}'.format(self.data_ready))
         self.data_ready.emit(self)
         self.ready.emit()
 
@@ -91,13 +101,8 @@ class Dataset(QObject):
     @pyqtSlot(object)
     def set_data(self, data):
         self._data = data
+        self._is_ready = True
         self.data_changed()
-
-    def data_is_ready(self):
-        if len(self._workers) == 0:
-            self.ready.emit()
-            return True
-        return False
 
     def indices(self):
         if self.parent() is not None:
@@ -124,14 +129,15 @@ class Dataset(QObject):
         # Clean up references
         thread.finished.connect(partial(self._workers.remove, (worker, thread)))
 
-        if waitfor:
-            if waitfor.data_is_ready():
+        if waitfor is not None:
+            waitfor = MultiWait(waitfor)
+            if waitfor.is_ready():
                 thread.start()
             else:
+                thread.waitfor = waitfor  # Thread keeps reference to where it waits on.
                 waitfor.ready.connect(thread.start)
         else:
             thread.start()
-
 
     def normalize(self):
         Y = self.data()[:, :-self.hidden_features()].copy()
@@ -180,9 +186,6 @@ class InputDataset(Dataset):
     def root(self):
         return self
 
-    def root_data(self):
-        return self.data()
-
 
 class Clustering(Dataset):
 
@@ -194,48 +197,6 @@ class Clustering(Dataset):
         return self._support
 
 
-class TSNEEmbedding(Dataset):
-
-    class TSNEEmbedder(QObject):
-
-        ready = pyqtSignal(object)
-
-        def __init__(self, parent, **parameters):
-            super().__init__()
-            self.parent = parent
-            self.parameters = parameters
-
-        def work(self):
-            # Hide hidden features
-            X_use, X_hidden = hide_features(self.parent.data(), self.parent.hidden_features())
-            
-            # t-SNE embedding
-            print(X_use.shape)
-            print(self.parameters)
-            tsne = TSNE(**self.parameters)
-            Y_use = tsne.fit_transform(X_use)
-
-            # Restore original hidden features
-            Y = np.concatenate((Y_use, X_hidden), axis=1)
-
-            self.ready.emit(Y)
-
-    def __init__(self, parent, name=None, hidden=None, **parameters):
-        if name is None:
-            name = 'E({})'.format(parent.name())
-        super().__init__(name, parent, data=None, hidden=hidden)
-
-        embedder = TSNEEmbedding.TSNEEmbedder(parent, **parameters)
-
-        self.spawn_thread(embedder, self.set_data, waitfor=parent)
-
-    def root(self):
-        return self.parent().root()
-
-    def root_data(self):
-        return self.parent().root_data()
-
-
 class Selection(Dataset):
 
     def __init__(self, parent, idcs=None, name=None, hidden=None):
@@ -243,15 +204,14 @@ class Selection(Dataset):
             name = 'S({})'.format(parent.name())
         self._idcs = idcs
         super().__init__(name, parent, None, hidden=hidden)
+        if idcs is not None:
+            self._is_ready = True
 
     def data(self):
         return self.parent().data()[self._idcs, :]
 
     def root(self):
         return self.parent().root()
-
-    def root_data(self):
-        return self.parent().root_data()[self._idcs, :]
 
     def indices(self):
         return self.parent().indices()[self._idcs]
@@ -264,32 +224,8 @@ class Selection(Dataset):
     @pyqtSlot(object)
     def set_indices(self, idcs):
         self._idcs = idcs
+        self._is_ready = True
         self.data_changed()
-
-class RandomSampling(Selection):
-
-    class RandomSampler(QObject):
-
-        ready = pyqtSignal(object)
-
-        def __init__(self, parent, n_samples):
-            super().__init__()
-            self.parent = parent
-            self.n_samples = n_samples
-
-        def work(self):
-            idcs = np.random.choice(self.parent.n_points(), self.n_samples, replace=False)
-            self.ready.emit(idcs)
-
-    def __init__(self, parent, n_samples, name=None, hidden=None):
-        if name is None:
-            name = 'RndS({})'.format(parent.name())
-
-        super().__init__(parent, idcs=None, name=name, hidden=hidden)
-
-        sampler = RandomSampling.RandomSampler(parent, n_samples)
-        self.spawn_thread(sampler, self.set_indices, waitfor=parent)
-    
 
 
 class KNNFetching(Selection):
@@ -315,30 +251,42 @@ class KNNFetching(Selection):
         if hidden is None:
             hidden = root.hidden_features()
         super().__init__(root, idcs=None, name=name, hidden=hidden)
-        
-        query_nd = RootSelection(query_2d)
 
+        query_nd = RootSelection(query_2d)
         fetcher = KNNFetching.KNNFetcher(query_nd, root, n_points)
-        self.spawn_thread(fetcher, self.set_indices)
+
+        self.spawn_thread(fetcher, self.set_indices, waitfor=(query_nd, root))
 
 
 class Merging(Dataset):
 
-    def __init__(self, parent_1, parent_2, X, name=None, hidden=None):
+    def __init__(self, parent_1, parent_2, add_as_hidden=True, name=None, hidden=None):
         if name is None:
             name = 'M({}, {})'.format(parent_1.name(), parent_2.name())
-        if hidden is None:
+        if add_as_hidden:
             hidden = parent_2.n_dimensions()
+        else:
+            raise NotImplementedError
+
+        X = np.column_stack((parent_1.data(), parent_2.data()))
         super().__init__(name, parent_1, X, hidden=hidden)
 
     def root(self):
         return self
 
-    def root_data(self):
-        return self.data()
-
-
 class Union(Dataset):
+
+    class Unioner(QObject):
+
+        ready = pyqtSignal()
+
+        def __init__(self, parent_1, parent_2):
+            super().__init__()
+            self.parent_1 = parent_1
+            self.parent_2 = parent_2
+
+        def work(self):
+            self.ready.emit()
 
     def __init__(self, parent_1, parent_2, name=None, hidden=None):
         if name is None:
@@ -346,24 +294,29 @@ class Union(Dataset):
         self._parent_1 = parent_1
         self._parent_2 = parent_2
 
-        unique_indices = np.union1d(parent_1.indices(), parent_1.indices())
-        self._idcs = unique_indices
-
         # Use parent_1 as the legal parent
         super().__init__(name, parent_1, None, hidden=hidden)
 
+        unioner = Union.Unioner(parent_1, parent_2)
+        self.spawn_thread(unioner, self.set_indices, waitfor=(parent_1, parent_2))
+
     def indices(self):
-        return self._idcs.copy()
+        return np.concatenate((self._parent_1.indices(), self._parent_2.indices()), axis=0)
+
+    @pyqtSlot()
+    def set_indices(self):
+        self._is_ready = True
+        self.data_changed()
 
     def data(self):
-        return np.concatenate((self._parent_1.data(), self._parent_2.data()), axis=0)
+        if self._is_ready:
+            return np.row_stack((self._parent_1.data(), self._parent_2.data()))
+        else:
+            return None
 
     def root(self):
         assert(self._parent_1.root() == self._parent_2.root())
         return self.parent().root()
-
-    def root_data(self):
-        return self.root().data()[self.indices(), :]
 
     def destroy(self):
         del self._idcs
@@ -379,3 +332,34 @@ class RootSelection(Selection):
         parent = selection.root()
         idcs = selection.indices()
         super().__init__(name='RS({})'.format(selection.name()), parent=parent, idcs=idcs, hidden=hidden)
+
+
+class MultiWait(QObject):
+    ready = pyqtSignal()
+
+    def __init__(self, datasets):
+        super().__init__()
+        self.datasets = set(datasets)
+        for dataset in datasets:
+            if not dataset.is_ready():
+                dataset.data_ready.connect(self.subset_is_ready)
+
+    @pyqtSlot(object)
+    def subset_is_ready(self, ready_dataset):
+        print('{} is ready!'.format(ready_dataset))
+        if all([dataset.is_ready() for dataset in self.datasets]):
+            self.ready.emit()
+
+    def is_ready(self):
+        return all([dataset.is_ready() for dataset in self.datasets])
+
+class Worker(QObject):
+    # Must be overwritten of number of objects differs
+    ready = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+
+    @abc.abstractmethod
+    def work(self):
+        """Method that should do the work. E.g., make an embedding."""

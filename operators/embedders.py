@@ -74,52 +74,6 @@ class Embedder(Operator):
         }
 
 
-class PCAEmbedder(Embedder):
-
-    def __init__(self):
-        super().__init__()
-
-    def embed(self, X):
-        parameters = self.parameters().copy()
-        del parameters['n_hidden_features']
-        del parameters['normalize']
-        pca = PCA(**parameters)
-        Y = pca.fit_transform(X)
-        return Y
-
-    @classmethod
-    def parameters_description(cls):
-        desc = super().parameters_description()
-        desc.update({
-            'n_components': (int, 2)
-        })
-        return desc
-
-
-class TSNEEmbedder(Embedder):
-
-    def __init__(self):
-        super().__init__()
-
-    def embed(self, X):
-        parameters = self.parameters().copy()
-        del parameters['n_hidden_features']
-        del parameters['normalize']
-        tsne = TSNE(**parameters)
-        Y = tsne.fit_transform(X)
-        return Y
-
-    @classmethod
-    def parameters_description(cls):
-        desc = super().parameters_description()
-        desc.update({
-            'n_components': (int, 2),
-            'perplexity': (float, 30.0),
-            'n_iter': (int, 200)
-        })
-        return desc
-
-
 class LLEEmbedder(Embedder):
 
     def __init__(self):
