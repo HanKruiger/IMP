@@ -22,18 +22,17 @@ def hide_features(X, n_hidden_features):
 
 
 # Return a dataset that contains the k closest points in nd_dataset closest to query_nd (but not also in query_nd!).
-def knn_fetch(query_nd, nd_dataset, k):
-    # Hide the hidden features
-    X_query_use, X_query_hidden = hide_features(query_nd.data(), query_nd.hidden_features())
+def knn_fetch(X, query_idcs, k):
+    X_query = X[query_idcs, :]
 
     # Remove points in X_query_use from X_use, because we don't want the same points as the query.
-    dataset_no_query_idcs = np.delete(np.arange(nd_dataset.n_points()), query_nd.indices(), axis=0)
-    X_use, X_hidden = hide_features(nd_dataset.data()[dataset_no_query_idcs, :], nd_dataset.hidden_features())
+    no_query_idcs = np.delete(np.arange(X.shape[0]), query_idcs, axis=0)
+    X_no_query = X[no_query_idcs, :]
 
     # Find the point in the 2d selection closest to the center (cursor)
     nn = NearestNeighbors(n_neighbors=k)  # Can probably query fewer points..
-    nn.fit(X_use)
-    nbr_dists, nbr_idcs = nn.kneighbors(X_query_use, return_distance=True)
+    nn.fit(X_no_query)
+    nbr_dists, nbr_idcs = nn.kneighbors(X_query, return_distance=True)
 
     U_idcs = np.unique(nbr_idcs)
     U_dists = np.full(U_idcs.size, np.inf)
@@ -54,7 +53,7 @@ def knn_fetch(query_nd, nd_dataset, k):
         closest_nbrs = np.argpartition(U_dists, k)[:k]
         X_knn = U_idcs[closest_nbrs]  # Indices the data in nd_dataset_noquery
 
-    X_knn = dataset_no_query_idcs[X_knn]  # Indices the data in nd_dataset
+    X_knn = no_query_idcs[X_knn]  # Indices the data in nd_dataset
 
-    X_knn = np.concatenate([X_knn, query_nd.indices()])
-    return X_knn
+    # X_knn = np.concatenate([X_knn, query_nd.indices_in_root()])
+    return np.sort(X_knn)

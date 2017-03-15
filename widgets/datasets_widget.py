@@ -34,7 +34,7 @@ class DatasetsWidget(QGroupBox):
         N_max_hbox = QHBoxLayout()
         self.N_max_textbox = QLineEdit()
         self.N_max_textbox.setValidator(QIntValidator())
-        self.N_max_textbox.setText(str(1000))
+        self.N_max_textbox.setText(str(100))
         N_max_hbox.addWidget(QLabel('N_max'))
         N_max_hbox.addWidget(self.N_max_textbox)
 
@@ -88,11 +88,9 @@ class DatasetsWidget(QGroupBox):
         )
 
     def show_dataset(self, dataset):
-        datasets_view = DatasetsView()
+        
 
-        datasets_view.add_dataset(dataset, 'regular')
-
-        self.imp_app.gl_widget.set_datasets_view(datasets_view)
+        self.imp_app.gl_widget.show_dataset(dataset)
 
     # @pyqtSlot(int) Somehow I cannot decorate this!
     def show_dataset_item(self, item):

@@ -63,7 +63,8 @@ class Dataset(QObject):
         return self._is_ready
 
     def destroy(self):
-        del self._data
+        if self._data is not None:
+            del self._data
         if self._parent is not None:
             self._parent.remove_child(self)
 
@@ -103,11 +104,11 @@ class Dataset(QObject):
         self._is_ready = True
         self.data_changed()
 
-    def indices(self):
-        if self.parent() is not None:
-            return self.parent().indices()
-        else:
+    def indices_in_root(self):
+        if self.parent() is None:
             return np.arange(self.n_points())
+        else:
+            return self.parent().indices_in_root()[self.indices_in_parent()]
 
     def hidden_features(self):
         return self._n_hidden_features
@@ -186,62 +187,40 @@ class InputDataset(Dataset):
         return self
 
 
-class Clustering(Dataset):
-
-    def __init__(self, name, parent, X, support, hidden=None):
-        super().__init__(name, parent, X, hidden=hidden)
-        self._support = support
-
-    def support(self):
-        return self._support
-
-
 class Selection(Dataset):
 
     def __init__(self, parent, idcs=None, name=None, hidden=None):
         if name is None:
             name = 'S({})'.format(parent.name())
-        self._idcs = idcs
+        self._idcs_in_parent = idcs
         super().__init__(name, parent, None, hidden=hidden)
         if idcs is not None:
             self._is_ready = True
 
     def data(self):
-        return self.parent().data()[self._idcs, :]
+        if self.is_ready():
+            return self.parent().data()[self.indices_in_parent(), :]
+        else:
+            return None
 
     def root(self):
         return self.parent().root()
 
-    def indices(self):
-        return self.parent().indices()[self._idcs]
+    def indices_in_root(self):
+        return self.parent().indices_in_root()[self._idcs_in_parent]
 
-    def destroy(self):
-        del self._idcs
-        if self._parent is not None:
-            self._parent.remove_child(self)
+    def indices_in_parent(self):
+        return self._idcs_in_parent
 
     @pyqtSlot(object)
-    def set_indices(self, idcs):
-        self._idcs = idcs
+    def set_indices_in_parent(self, idcs):
+        self._idcs_in_parent = idcs
         self._is_ready = True
         self.data_changed()
 
 
 class KNNFetching(Selection):
 
-    class KNNFetcher(QObject):
-
-        ready = pyqtSignal(object)
-
-        def __init__(self, query_nd, root, n_points):
-            super().__init__()
-            self.query_nd = query_nd
-            self.root = root
-            self.n_points = n_points
-
-        def work(self):
-            idcs = knn_fetch(self.query_nd, self.root, self.n_points)
-            self.ready.emit(idcs)
 
     def __init__(self, query_2d, n_points, name=None, hidden=None):
         root = query_2d.root()
@@ -254,7 +233,23 @@ class KNNFetching(Selection):
         query_nd = RootSelection(query_2d)
         fetcher = KNNFetching.KNNFetcher(query_nd, root, n_points)
 
-        self.spawn_thread(fetcher, self.set_indices, waitfor=(query_nd, root))
+        self.spawn_thread(fetcher, self.set_indices_in_parent, waitfor=(query_nd, root))
+    
+    class KNNFetcher(QObject):
+
+        ready = pyqtSignal(object)
+
+        def __init__(self, query_nd, root, n_points):
+            super().__init__()
+            self.query_nd = query_nd
+            self.root = root
+            self.n_points = n_points
+
+        def work(self):
+            X, _ = hide_features(self.root.data(), self.root.hidden_features())
+            query_idcs = self.query_nd.indices_in_root()
+            idcs_in_parent = knn_fetch(X, query_idcs, self.n_points)
+            self.ready.emit(idcs_in_parent)
 
 
 class Merging(Dataset):
@@ -297,8 +292,11 @@ class Union(Dataset):
         unioner = Union.Unioner()
         self.spawn_thread(unioner, self.dependencies_met, waitfor=(parent_1, parent_2))
 
-    def indices(self):
-        return np.concatenate((self._parent_1.indices(), self._parent_2.indices()), axis=0)
+    def indices_in_root(self):
+        return np.concatenate((self._parent_1.indices_in_root(), self._parent_2.indices_in_root()), axis=0)
+
+    def indices_in_parent(self):
+        return (np.arange(self._parent_1.n_points()), np.arange(self._parent_2.n_points()))
 
     @pyqtSlot()
     def dependencies_met(self):
@@ -315,10 +313,33 @@ class Union(Dataset):
         assert(self._parent_1.root() == self._parent_2.root())
         return self.parent().root()
 
-    def destroy(self):
-        del self._idcs
-        if self._parent is not None:
-            self._parent.remove_child(self)
+class Difference(Selection):
+
+
+    def __init__(self, parent_1, parent_2, name=None, hidden=None):
+        if name is None:
+            name = 'Difference({}, {})'.format(parent_1.name(), parent_2.name())
+        # Use parent_1 as the legal parent (this is the only one that is indexed!)
+        super().__init__(parent_1, name=name, hidden=hidden)
+
+        differencer = Difference.Differencer(parent_1, parent_2)
+        self.spawn_thread(differencer, self.set_indices_in_parent, waitfor=(parent_1, parent_2))
+
+    class Differencer(QObject):
+
+        ready = pyqtSignal(object)
+
+        def __init__(self, parent_1, parent_2):
+            super().__init__()
+            self.parent_1 = parent_1
+            self.parent_2 = parent_2
+
+        def work(self):
+            idcs_in_root = np.setdiff1d(self.parent_1.indices_in_root(), self.parent_2.indices_in_root())
+            # parent_1_idcs_s = sorted
+            assert(np.all(self.parent_1.indices_in_root() == np.sort(self.parent_1.indices_in_root())))
+            idcs_in_parent = np.searchsorted(self.parent_1.indices_in_root(), idcs_in_root)
+            self.ready.emit(idcs_in_parent)
 
 
 class RootSelection(Selection):
@@ -327,7 +348,7 @@ class RootSelection(Selection):
         if hidden is None:
             hidden = selection.hidden_features()
         parent = selection.root()
-        idcs = selection.indices()
+        idcs = selection.indices_in_root()
         super().__init__(name='RS({})'.format(selection.name()), parent=parent, idcs=idcs, hidden=hidden)
 
 

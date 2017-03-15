@@ -48,6 +48,11 @@ class OpenGLWidget(QOpenGLWidget):
         self.vao = QOpenGLVertexArrayObject()
         self.vao.create()
 
+    def show_dataset(self, dataset):
+        datasets_view = DatasetsView(previous=self.datasets_view)
+        datasets_view.add_dataset(dataset, 'regular')
+        self.set_datasets_view(datasets_view)
+
     def clear_datasets_view(self):
         if self.datasets_view is not None:
             self.makeCurrent()
@@ -83,6 +88,10 @@ class OpenGLWidget(QOpenGLWidget):
         self.view_new = QMatrix4x4(self.view)
 
         self.update()
+
+    def previous_view(self):
+        if self.datasets_view is not None and self.datasets_view.previous is not None:
+            self.set_datasets_view(self.datasets_view.previous)
 
     def set_attribute(self, vbo, dim, N, m, attribute):
         self.makeCurrent()
@@ -140,11 +149,19 @@ class OpenGLWidget(QOpenGLWidget):
                 invisibles = None
 
             if visibles is not None and invisibles is not None:
-                new_neighbours = KNNFetching(visibles, invisibles.n_points())
-                rs = RootSelection(visibles)
-                new_neighbours_embedding = MDSEmbedding(Union(rs, new_neighbours))
-                new_neighbours_embedding.data_ready.connect(self.imp_app.datasets_widget.show_dataset)
+                representatives_nd = RootSelection(visibles)
+                representatives_2d = visibles
 
+                knn_fetching = KNNFetching(visibles, invisibles.n_points())
+
+                # The KNN fetch MINUS the representatives.
+                new_neighbours_nd = Difference(knn_fetching, representatives_2d)
+                
+                new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
+                all_embedding = Union(new_neighbours_2d, representatives_2d)
+                all_embedding.data_ready.connect(self.imp_app.datasets_widget.show_dataset)
+        else:
+            self.previous_view()
         self.view_transition = 0.0
         self.zoom_animation_timer.start(20)
 

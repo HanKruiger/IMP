@@ -10,9 +10,10 @@ from model.dataset import Selection
 
 class DatasetsView:
 
-    def __init__(self):
+    def __init__(self, previous=None):
         self._viewed_datasets = dict()
         self.shader_program = None
+        self.previous = previous
 
     def add_dataset(self, dataset, kind):
         self._viewed_datasets[dataset] = {
