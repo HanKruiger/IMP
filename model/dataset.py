@@ -78,7 +78,6 @@ class Dataset(QObject):
 
     def data_changed(self):
         self.q_item().emitDataChanged()
-        print('Emitting {}'.format(self.data_ready))
         self.data_ready.emit(self)
         self.ready.emit()
 
@@ -280,10 +279,8 @@ class Union(Dataset):
 
         ready = pyqtSignal()
 
-        def __init__(self, parent_1, parent_2):
+        def __init__(self):
             super().__init__()
-            self.parent_1 = parent_1
-            self.parent_2 = parent_2
 
         def work(self):
             self.ready.emit()
@@ -297,14 +294,14 @@ class Union(Dataset):
         # Use parent_1 as the legal parent
         super().__init__(name, parent_1, None, hidden=hidden)
 
-        unioner = Union.Unioner(parent_1, parent_2)
-        self.spawn_thread(unioner, self.set_indices, waitfor=(parent_1, parent_2))
+        unioner = Union.Unioner()
+        self.spawn_thread(unioner, self.dependencies_met, waitfor=(parent_1, parent_2))
 
     def indices(self):
         return np.concatenate((self._parent_1.indices(), self._parent_2.indices()), axis=0)
 
     @pyqtSlot()
-    def set_indices(self):
+    def dependencies_met(self):
         self._is_ready = True
         self.data_changed()
 
@@ -346,7 +343,6 @@ class MultiWait(QObject):
 
     @pyqtSlot(object)
     def subset_is_ready(self, ready_dataset):
-        print('{} is ready!'.format(ready_dataset))
         if all([dataset.is_ready() for dataset in self.datasets]):
             self.ready.emit()
 
@@ -354,7 +350,7 @@ class MultiWait(QObject):
         return all([dataset.is_ready() for dataset in self.datasets])
 
 class Worker(QObject):
-    # Must be overwritten of number of objects differs
+    # Must be overwritten if number of objects differs
     ready = pyqtSignal(object)
 
     def __init__(self):

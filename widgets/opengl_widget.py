@@ -142,7 +142,7 @@ class OpenGLWidget(QOpenGLWidget):
             if visibles is not None and invisibles is not None:
                 new_neighbours = KNNFetching(visibles, invisibles.n_points())
                 rs = RootSelection(visibles)
-                new_neighbours_embedding = PCAEmbedding(Union(rs, new_neighbours))
+                new_neighbours_embedding = MDSEmbedding(Union(rs, new_neighbours))
                 new_neighbours_embedding.data_ready.connect(self.imp_app.datasets_widget.show_dataset)
 
         self.view_transition = 0.0

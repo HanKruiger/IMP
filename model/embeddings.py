@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 
 from model import *
 from operators.utils import hide_features
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE, MDS
 from sklearn.decomposition import PCA
 import numpy as np
 
@@ -79,6 +79,35 @@ class PCAEmbedding(Embedding):
             parameters['n_components'] = 2
 
         worker = PCAEmbedding.PCAWorker(parent, **parameters)
+
+        self.spawn_thread(worker, self.set_data, waitfor=(parent,))
+
+class MDSEmbedding(Embedding):
+
+    class MDSWorker(Worker):
+
+        def __init__(self, parent, **parameters):
+            super().__init__()
+            self.parent = parent
+            self.parameters = parameters
+
+        def work(self):
+            # Hide hidden features
+            X_use, X_hidden = hide_features(self.parent.data(), self.parent.hidden_features())
+
+            # MDS embedding
+            mds = MDS(**self.parameters)
+            Y_use = mds.fit_transform(X_use)
+
+            # Restore original hidden features
+            Y = np.concatenate((Y_use, X_hidden), axis=1)
+
+            self.ready.emit(Y)
+
+    def __init__(self, parent, name=None, hidden=None, **parameters):
+        super().__init__(parent, name=name, hidden=hidden)
+
+        worker = MDSEmbedding.MDSWorker(parent, **parameters)
 
         self.spawn_thread(worker, self.set_data, waitfor=(parent,))
 

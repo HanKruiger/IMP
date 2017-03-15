@@ -107,12 +107,13 @@ class DatasetsWidget(QGroupBox):
         self.imp_app.statusBar().clearMessage()
         for dataset in reader.output():
             self.add_dataset(dataset)
-            if dataset.n_points() > 1000:
-                sampling = RandomSampling(dataset, 1000)
+            N_max = int(self.N_max_textbox.text())
+            if dataset.n_points() > N_max:
+                sampling = RandomSampling(dataset, N_max)
                 dataset = sampling
 
             # embedding = TSNEEmbedding(dataset, n_iter=1500)
-            embedding = PCAEmbedding(dataset, n_components=2)
+            embedding = MDSEmbedding(dataset, n_components=2)
             embedding.data_ready.connect(self.show_dataset)
 
         self._workers.remove(reader)
