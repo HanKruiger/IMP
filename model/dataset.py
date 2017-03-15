@@ -280,7 +280,7 @@ class Union(Dataset):
         def work(self):
             self.ready.emit()
 
-    def __init__(self, parent_1, parent_2, name=None, hidden=None):
+    def __init__(self, parent_1, parent_2, name=None, hidden=None, async=True):
         if name is None:
             name = 'Union({}, {})'.format(parent_1.name(), parent_2.name())
         self._parent_1 = parent_1
@@ -289,8 +289,12 @@ class Union(Dataset):
         # Use parent_1 as the legal parent
         super().__init__(name, parent_1, None, hidden=hidden)
 
-        unioner = Union.Unioner()
-        self.spawn_thread(unioner, self.dependencies_met, waitfor=(parent_1, parent_2))
+        if async:
+            unioner = Union.Unioner()
+            self.spawn_thread(unioner, self.dependencies_met, waitfor=(parent_1, parent_2))
+        else:
+            assert(parent_1.is_ready() and parent_2.is_ready())
+            self.dependencies_met()
 
     def indices_in_root(self):
         return np.concatenate((self._parent_1.indices_in_root(), self._parent_2.indices_in_root()), axis=0)

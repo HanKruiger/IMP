@@ -47,7 +47,7 @@ class DatasetsWidget(QGroupBox):
 
     def worker_done(self, dataset, worker):
         self._workers.remove(worker)
-        self.show_dataset(dataset)
+        self.imp_app.gl_widget.show_dataset(dataset)
 
     def datasets(self):
         datasets = set()
@@ -87,17 +87,12 @@ class DatasetsWidget(QGroupBox):
             self.model.index(topleft.row(), 2, self.model.parent(topleft)), dataset.n_dimensions()
         )
 
-    def show_dataset(self, dataset):
-        
-
-        self.imp_app.gl_widget.show_dataset(dataset)
-
     # @pyqtSlot(int) Somehow I cannot decorate this!
     def show_dataset_item(self, item):
         dataset = self.model.data(item, role=Qt.UserRole)
         if dataset is None:
             return
-        self.show_dataset(dataset)
+        self.imp_app.gl_widget.show_dataset(dataset)
         
 
     @pyqtSlot(object)
@@ -112,7 +107,7 @@ class DatasetsWidget(QGroupBox):
 
             # embedding = TSNEEmbedding(dataset, n_iter=1500)
             embedding = MDSEmbedding(dataset, n_components=2)
-            embedding.data_ready.connect(self.show_dataset)
+            embedding.data_ready.connect(self.imp_app.gl_widget.show_dataset)
 
         self._workers.remove(reader)
 

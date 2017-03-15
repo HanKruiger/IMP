@@ -8,6 +8,8 @@ from operators.utils import knn_fetch
 
 class OpenGLWidget(QOpenGLWidget):
 
+    animation_done = pyqtSignal()
+
     def __init__(self, imp_app):
         super().__init__()
         self.imp_app = imp_app
@@ -48,10 +50,29 @@ class OpenGLWidget(QOpenGLWidget):
         self.vao = QOpenGLVertexArrayObject()
         self.vao.create()
 
-    def show_dataset(self, dataset):
+    def show_dataset(self, dataset, representatives=None):
         datasets_view = DatasetsView(previous=self.datasets_view)
         datasets_view.add_dataset(dataset, 'regular')
+        if representatives is not None:
+            datasets_view.add_dataset(representatives, 'representatives')
+
         self.set_datasets_view(datasets_view)
+
+    def schedule_for_show(self, dataset, representatives):
+        self.waitfor = MultiWait((dataset, representatives))
+        def callback():
+            print('Deleting waitfor')
+            self.show_dataset(dataset, representatives=representatives)
+        
+        def after_animation():
+            self.animation_done.disconnect(after_animation)
+            if self.waitfor.is_ready():
+                callback()
+            else:
+                print('Connecting waitfor')
+                self.waitfor.ready.connect(callback)
+
+        self.animation_done.connect(after_animation)
 
     def clear_datasets_view(self):
         if self.datasets_view is not None:
@@ -124,46 +145,29 @@ class OpenGLWidget(QOpenGLWidget):
     def zoom(self, factor, pos):
         p_world = self.pixel_to_world(pos, d=3)
 
-        # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
-        self.view_new = QMatrix4x4(self.view)
-        self.view_new.translate((1 - factor) * p_world)
-        self.view_new.scale(factor)
-        
         if factor > 1:
-            visibles, invisibles = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
-            if len(visibles) > 0:
-                while len(visibles) > 1:
-                    d1 = visibles.pop(0)
-                    d2 = visibles[0]
-                    visibles[0] = Union(d1, d2)
-                visibles = visibles[0]
-            else:
-                visibles = None
-            if len(invisibles) > 0:
-                while len(invisibles) > 1:
-                    d1 = invisibles.pop(0)
-                    d2 = invisibles[0]
-                    invisibles[0] = Union(d1, d2)
-                invisibles = invisibles[0]
-            else:
-                invisibles = None
+            # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
+            self.view_new = QMatrix4x4(self.view)
+            self.view_new.translate((1 - factor) * p_world)
+            self.view_new.scale(factor)
+            self.view_transition = 0.0
+            self.zoom_animation_timer.start(20)
+            visibles, invisibles, union = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
 
             if visibles is not None and invisibles is not None:
-                representatives_nd = RootSelection(visibles)
-                representatives_2d = visibles
+                representatives_2d = Selection(union, idcs=visibles)
 
-                knn_fetching = KNNFetching(visibles, invisibles.n_points())
+                knn_fetching = KNNFetching(representatives_2d, invisibles.size)
 
                 # The KNN fetch MINUS the representatives.
                 new_neighbours_nd = Difference(knn_fetching, representatives_2d)
                 
                 new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
-                all_embedding = Union(new_neighbours_2d, representatives_2d)
-                all_embedding.data_ready.connect(self.imp_app.datasets_widget.show_dataset)
+                self.schedule_for_show(new_neighbours_2d, representatives_2d)
+                # all_embedding = Union(new_neighbours_2d, representatives_2d)
+                # all_embedding.data_ready.connect(self.show_dataset)
         else:
             self.previous_view()
-        self.view_transition = 0.0
-        self.zoom_animation_timer.start(20)
 
     def pixel_to_world(self, p_in, d=2):
         try:
@@ -254,7 +258,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.view_transition += 0.08
         if self.view_transition >= 1:
             self.zoom_animation_timer.stop()
-
+            self.animation_done.emit()
             # Reset state to have new matrix as the view matrix
             self.view = QMatrix4x4(self.view_new)
             self.view_transition = 0.0

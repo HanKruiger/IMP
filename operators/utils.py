@@ -29,6 +29,8 @@ def knn_fetch(X, query_idcs, k):
     no_query_idcs = np.delete(np.arange(X.shape[0]), query_idcs, axis=0)
     X_no_query = X[no_query_idcs, :]
 
+    k = min(k, X_no_query.shape[0] - 1)
+
     # Find the point in the 2d selection closest to the center (cursor)
     nn = NearestNeighbors(n_neighbors=k)  # Can probably query fewer points..
     nn.fit(X_no_query)

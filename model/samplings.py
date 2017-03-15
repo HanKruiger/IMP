@@ -23,7 +23,7 @@ class RandomSampling(Selection):
 
     def __init__(self, parent, n_samples, name=None, hidden=None):
         if name is None:
-            name = 'RndS({})'.format(parent.name())
+            name = 'Rnd({})'.format(parent.name())
 
         super().__init__(parent, idcs=None, name=name, hidden=hidden)
 

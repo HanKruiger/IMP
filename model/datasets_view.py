@@ -5,7 +5,7 @@ from PyQt5.QtCore import *
 import os
 import numpy as np
 
-from model.dataset import Selection
+from model import *
 
 
 class DatasetsView:
@@ -24,6 +24,20 @@ class DatasetsView:
 
     def datasets(self):
         return [dataset for dataset in self._viewed_datasets.keys()]
+
+    def name(self):
+        return ', '.join([dataset.name() for dataset in self.datasets()])
+
+    def root(self):
+        root = datasets[0].root()
+        assert(all([dataset.root == root for dataset in self.datasets()]))
+        return root
+
+    # def make_selection(self):
+    #     union = self.datasets()[0]
+    #     for dataset in self.datasets()[1:]:
+    #         union = Union(union, dataset)
+    #     return union
 
     def get_bounds(self):
         datasets = self.datasets()
@@ -47,28 +61,20 @@ class DatasetsView:
         projection_view = np.delete(projection_view, 2, axis=0)
         projection_view = np.delete(projection_view, 2, axis=1)
 
-        visibles = []
-        invisibles = []
+        union = self.datasets()[0]
+        for dataset in self.datasets()[1:]:
+            union = Union(union, dataset, async=False)
 
-        for dataset in self.datasets():
-            N = dataset.n_points()
-            X = dataset.data()[:, :2]
-            X = np.concatenate((X, np.ones((N, 1))), axis=1)
-            Y = X.dot(projection_view)
+        N = union.n_points()
+        X = union.data()[:, :2]
+        X = np.concatenate((X, np.ones((N, 1))), axis=1)
+        Y = X.dot(projection_view)
 
-            Y_visible = np.abs(Y).max(axis=1) <= 1
-            visible_idcs = np.where(Y_visible == True)[0]
-            invisible_idcs = np.where(Y_visible == False)[0]
+        Y_visible = np.abs(Y).max(axis=1) <= 1
+        visible_idcs = np.where(Y_visible == True)[0]
+        invisible_idcs = np.where(Y_visible == False)[0]
 
-            # Only make new dataset if it's non-empty.
-            if visible_idcs.shape[0] > 0:
-                visible_selection = Selection(dataset, visible_idcs)
-                visibles.append(visible_selection)
-            if invisible_idcs.shape[0] > 0:
-                invisible_selection = Selection(dataset, invisible_idcs)
-                invisibles.append(invisible_selection)
-
-        return visibles, invisibles
+        return visible_idcs, invisible_idcs, union
 
     def make_vbo(self, dataset, dim, normalize=False):
         X_32 = np.array(dataset.data()[:, dim], dtype=np.float32)
