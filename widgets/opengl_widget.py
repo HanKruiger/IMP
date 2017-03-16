@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 
 import numpy as np
 from model import *
-from operators.utils import knn_fetch
+
 
 class OpenGLWidget(QOpenGLWidget):
 
@@ -22,7 +22,7 @@ class OpenGLWidget(QOpenGLWidget):
 
         # Transforms points from view space to clip space
         self.projection = QMatrix4x4()
-        
+
         # Transforms points from screen space to clip space
         # (inverse viewport transform)
         self.pixel = QMatrix4x4()
@@ -44,7 +44,6 @@ class OpenGLWidget(QOpenGLWidget):
             self.shader_program.addShaderFromSourceCode(QOpenGLShader.Fragment, fs.read())
 
         self.shader_program.link()
-        
 
     def init_vao(self):
         self.vao = QOpenGLVertexArrayObject()
@@ -60,17 +59,14 @@ class OpenGLWidget(QOpenGLWidget):
 
     def schedule_for_show(self, dataset, representatives):
         self.waitfor = MultiWait((dataset, representatives))
+
         def callback():
             self.show_dataset(dataset, representatives=representatives)
-        
-        def after_animation():
-            self.animation_done.disconnect(after_animation)
-            if self.waitfor.is_ready():
-                callback()
-            else:
-                self.waitfor.ready.connect(callback)
 
-        self.animation_done.connect(after_animation)
+        if self.waitfor.is_ready():
+            callback()
+        else:
+            self.waitfor.ready.connect(callback)
 
     def clear_datasets_view(self):
         if self.datasets_view is not None:
@@ -80,7 +76,7 @@ class OpenGLWidget(QOpenGLWidget):
             self.doneCurrent()
             self.update()
 
-    def set_datasets_view(self, datasets_view):
+    def set_datasets_view(self, datasets_view, view_to_fit=False):
         self.clear_datasets_view()
 
         self.makeCurrent()
@@ -90,21 +86,22 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.datasets_view = datasets_view
 
-        x_min, x_max, y_min, y_max = datasets_view.get_bounds()
+        if view_to_fit:
+            x_min, x_max, y_min, y_max = datasets_view.get_bounds()
 
-        # Compute the center of the all-enclosing square, and the distance from center to its sides.
-        center = QVector2D((x_min + x_max) / 2, (y_min + y_max) / 2)
-        dist_to_sides = 0.5 * max(x_max - x_min, y_max - y_min)
-        
-        # To account for points that are almost exactly at the border, we need a small
-        # tolerance value. (Can also be seen as (very small) padding.)
-        tolerance = .2
-        dist_to_sides *= 1 + tolerance
+            # Compute the center of the all-enclosing square, and the distance from center to its sides.
+            center = QVector2D((x_min + x_max) / 2, (y_min + y_max) / 2)
+            dist_to_sides = 0.5 * max(x_max - x_min, y_max - y_min)
 
-        self.view.setToIdentity()
-        self.view.scale(1 / dist_to_sides)
-        self.view.translate(-center.x(), -center.y())
-        self.view_new = QMatrix4x4(self.view)
+            # To account for points that are almost exactly at the border, we need a small
+            # tolerance value. (Can also be seen as (very small) padding.)
+            tolerance = .2
+            dist_to_sides *= 1 + tolerance
+
+            self.view.setToIdentity()
+            self.view.scale(1 / dist_to_sides)
+            self.view.translate(-center.x(), -center.y())
+            self.view_new = QMatrix4x4(self.view)
 
         self.update()
 
@@ -140,17 +137,18 @@ class OpenGLWidget(QOpenGLWidget):
         self.doneCurrent()
         self.update()
 
-    def zoom(self, factor, pos):
+    def hierarchical_zoom(self, factor, pos):
         p_world = self.pixel_to_world(pos, d=3)
 
         if factor > 1:
             # Change the view matrix s.t. it is zoomed in/out, but maps p to the same point.
-            self.view_new = QMatrix4x4(self.view)
-            self.view_new.translate((1 - factor) * p_world)
-            self.view_new.scale(factor)
-            self.view_transition = 0.0
-            self.zoom_animation_timer.start(20)
-            visibles, invisibles, union = self.datasets_view.filter_unseen_points(self.projection * self.view_new)
+            # self.zoom(factor, pos)
+            # self.view_new = QMatrix4x4(self.view)
+            # self.view_new.translate((1 - factor) * p_world)
+            # self.view_new.scale(factor)
+            # self.view_transition = 0.0
+            # self.zoom_animation_timer.start(20)
+            visibles, invisibles, union = self.datasets_view.filter_unseen_points(self.projection * self.view)
 
             if visibles is not None and invisibles is not None:
                 representatives_2d = Selection(union, idcs=visibles)
@@ -159,22 +157,28 @@ class OpenGLWidget(QOpenGLWidget):
 
                 # The KNN fetch MINUS the representatives.
                 new_neighbours_nd = Difference(knn_fetching, representatives_2d)
-                
+
                 new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
                 self.schedule_for_show(new_neighbours_2d, representatives_2d)
-                # all_embedding = Union(new_neighbours_2d, representatives_2d)
-                # all_embedding.data_ready.connect(self.show_dataset)
         else:
             self.previous_view()
+
+    def zoom(self, factor, pos):
+        p_world = self.pixel_to_world(pos, d=3)
+        self.view_new = QMatrix4x4(self.view)
+        self.view_new.translate((1 - factor) * p_world)
+        self.view_new.scale(factor)
+        self.view_transition = 0.0
+        self.zoom_animation_timer.start(20)
 
     def pixel_to_world(self, p_in, d=2):
         try:
             scalar = float(p_in)
-            p_pixel = QVector4D(scalar, 0, 0, 0) # w = 0, since we want to transform a distance (no translations!).
+            p_pixel = QVector4D(scalar, 0, 0, 0)  # w = 0, since we want to transform a distance (no translations!).
         except TypeError:
             p_pixel = QVector4D(p_in)
             if not isinstance(p_in, QVector4D):
-                p_pixel.setW(1) # w = 1, since we assume a vector transformation (yes translations!).
+                p_pixel.setW(1)  # w = 1, since we assume a vector transformation (yes translations!).
 
         pixel_i, invertible = self.pixel.inverted()
         if not invertible:
@@ -192,7 +196,7 @@ class OpenGLWidget(QOpenGLWidget):
             return
 
         p_world = view_i.map(projection_i.map(pixel_i.map(p_pixel)))
-        
+
         if d == 4:
             return p_world
         elif d == 3:
@@ -201,7 +205,6 @@ class OpenGLWidget(QOpenGLWidget):
             return p_world.toVector2D()
         elif d == 1:
             return p_world.length()
-            
 
     def set_pointsize(self, point_size):
         self.point_size = float(point_size)**0.5
@@ -218,7 +221,7 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mousePressEvent(self, e):
         self.mouse = QVector2D(e.pos())
-       
+
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
             wheel_event.ignore()
@@ -230,7 +233,10 @@ class OpenGLWidget(QOpenGLWidget):
             return
 
         factor = 1.05 ** wheel_event.pixelDelta().y()
-        self.zoom(factor, wheel_event.pos())
+        if QGuiApplication.keyboardModifiers() == Qt.ControlModifier:
+            self.hierarchical_zoom(factor, wheel_event.pos())
+        else:
+            self.zoom(factor, wheel_event.pos())
 
     def minimumSizeHint(self):
         return QSize(50, 50)

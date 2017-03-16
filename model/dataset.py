@@ -3,9 +3,9 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import os
+import abc
 import numpy as np
 from functools import partial
-from operators.utils import *
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -49,13 +49,22 @@ class Dataset(QObject):
             return None
         return self.data().shape[0]
 
-    def n_dimensions(self):
-        if not self.is_ready():
-            return None
-        if len(self.data().shape) < 2:
-            return 1
+    def n_dimensions(self, count_hidden=True):
+        try:
+            n_dims = self._n_dimensions
+        except AttributeError:
+            if not self.is_ready():
+                return None
+            if len(self.data().shape) < 2:
+                n_dims = 1
+            else:
+                n_dims = self.data().shape[1]
+            pass
+
+        if not count_hidden:
+            return n_dims - self._n_hidden_features
         else:
-            return self.data().shape[1]
+            return n_dims
 
     def name(self):
         return self._name
@@ -99,12 +108,17 @@ class Dataset(QObject):
     def remove_child(self, child):
         self._children.remove(child)
 
-    def data(self):
-        return self._data
+    def data(self, split_hidden=False):
+        if split_hidden:
+            return (self._data[:, :-self.hidden_features()], self._data[:, -self.hidden_features():])
+        else:
+            return self._data
 
     @pyqtSlot(object)
     def set_data(self, data):
         self._data = data
+        self._n_points = data.shape[0]
+        self._n_dimensions = data.shape[1]
         self._is_ready = True
         self.data_changed()
 
@@ -117,12 +131,15 @@ class Dataset(QObject):
     def hidden_features(self):
         return self._n_hidden_features
 
+    def remove_worker(self, worker_thread):
+        self._workers.remove(worker_thread)
+
     def spawn_thread(self, worker, callback, waitfor=None):
         thread = QThread()
         worker.moveToThread(thread)
 
         # Save references
-        self._workers.add((worker, thread))
+        self._workers.add(worker)
 
         thread.started.connect(worker.work)
         worker.ready.connect(thread.quit)
@@ -130,8 +147,8 @@ class Dataset(QObject):
         thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
 
-        # Clean up references
-        thread.finished.connect(partial(self._workers.remove, (worker, thread)))
+        # Clean up reference to worker when finished
+        thread.finished.connect(partial(self.remove_worker, worker))
 
         if waitfor is not None:
             waitfor = MultiWait(waitfor)
@@ -158,6 +175,24 @@ class Dataset(QObject):
         Y -= np.median(Y, axis=0)
         self.data()[:, :-self.hidden_features()] = Y
 
+    class Worker(QObject):
+        # Must be overwritten if number of objects differs
+        ready = pyqtSignal(object)
+
+        def __init__(self):
+            super().__init__()
+
+        def moveToThread(self, thread):
+            super().moveToThread(thread)
+            # Save reference to thread
+            self.thread = thread
+
+        def deleteLater(self):
+            super().deleteLater()
+
+        @abc.abstractmethod
+        def work(self):
+            """Method that should do the work. E.g., make an embedding."""
 
 class DatasetItem(QStandardItem):
 
@@ -182,15 +217,6 @@ class DatasetItem(QStandardItem):
             return super().data(role)
 
 
-class InputDataset(Dataset):
-
-    def __init__(self, name, X, hidden=None):
-        super().__init__(name, None, X, hidden=hidden)
-
-    def root(self):
-        return self
-
-
 class Selection(Dataset):
 
     def __init__(self, parent, idcs=None, name=None, hidden=None):
@@ -201,9 +227,12 @@ class Selection(Dataset):
             self._is_ready = True
         super().__init__(name, parent, None, hidden=hidden)
 
-    def data(self):
+    def data(self, split_hidden=False):
         if self.is_ready():
-            return self.parent().data()[self.indices_in_parent(), :]
+            if split_hidden:
+                return (self.parent().data()[self.indices_in_parent(), :-self.hidden_features()], self.parent().data()[self.indices_in_parent(), -self.hidden_features():])
+            else:
+                return self.parent().data()[self.indices_in_parent(), :]
         else:
             return None
 
@@ -221,39 +250,6 @@ class Selection(Dataset):
         self._idcs_in_parent = idcs
         self._is_ready = True
         self.data_changed()
-
-
-class KNNFetching(Selection):
-
-
-    def __init__(self, query_2d, n_points, name=None, hidden=None):
-        root = query_2d.root()
-        if name is None:
-            name = 'F({}, {})'.format(root.name(), query_2d.name())
-        if hidden is None:
-            hidden = root.hidden_features()
-        super().__init__(root, idcs=None, name=name, hidden=hidden)
-
-        query_nd = RootSelection(query_2d)
-        fetcher = KNNFetching.KNNFetcher(query_nd, root, n_points)
-
-        self.spawn_thread(fetcher, self.set_indices_in_parent, waitfor=(query_nd, root))
-    
-    class KNNFetcher(QObject):
-
-        ready = pyqtSignal(object)
-
-        def __init__(self, query_nd, root, n_points):
-            super().__init__()
-            self.query_nd = query_nd
-            self.root = root
-            self.n_points = n_points
-
-        def work(self):
-            X, _ = hide_features(self.root.data(), self.root.hidden_features())
-            query_idcs = self.query_nd.indices_in_root()
-            idcs_in_parent = knn_fetch(X, query_idcs, self.n_points)
-            self.ready.emit(idcs_in_parent)
 
 
 class Merging(Dataset):
@@ -274,7 +270,7 @@ class Merging(Dataset):
 
 class Union(Dataset):
 
-    class Unioner(QObject):
+    class Unioner(Dataset.Worker):
 
         ready = pyqtSignal()
 
@@ -311,9 +307,15 @@ class Union(Dataset):
         self._is_ready = True
         self.data_changed()
 
-    def data(self):
+    def data(self, split_hidden=False):
         if self._is_ready:
-            return np.row_stack((self._parent_1.data(), self._parent_2.data()))
+            if split_hidden:
+                return (
+                    np.row_stack((self._parent_1.data()[:, :-self.hidden_features()], self._parent_2.data()[:, :-self.hidden_features()])),
+                    np.row_stack((self._parent_1.data()[:, -self.hidden_features():], self._parent_2.data()[:, -self.hidden_features():]))
+                )
+            else:
+                return np.row_stack((self._parent_1.data(), self._parent_2.data()))
         else:
             return None
 
@@ -333,9 +335,7 @@ class Difference(Selection):
         differencer = Difference.Differencer(parent_1, parent_2)
         self.spawn_thread(differencer, self.set_indices_in_parent, waitfor=(parent_1, parent_2))
 
-    class Differencer(QObject):
-
-        ready = pyqtSignal(object)
+    class Differencer(Dataset.Worker):
 
         def __init__(self, parent_1, parent_2):
             super().__init__()
@@ -378,13 +378,3 @@ class MultiWait(QObject):
     def is_ready(self):
         return all([dataset.is_ready() for dataset in self.datasets])
 
-class Worker(QObject):
-    # Must be overwritten if number of objects differs
-    ready = pyqtSignal(object)
-
-    def __init__(self):
-        super().__init__()
-
-    @abc.abstractmethod
-    def work(self):
-        """Method that should do the work. E.g., make an embedding."""

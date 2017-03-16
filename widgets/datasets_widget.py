@@ -2,10 +2,9 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from model.dataset import *
-from model.embeddings import *
-from model.datasets_view import DatasetsView
-from operators.readers import Reader
+from model import *
+# from model.embeddings import *
+# from model.datasets_view import DatasetsView
 
 import numpy as np
 
@@ -96,20 +95,17 @@ class DatasetsWidget(QGroupBox):
         
 
     @pyqtSlot(object)
-    def handle_reader_results(self, reader):
+    def handle_reader_results(self, dataset):
         self.imp_app.statusBar().clearMessage()
-        for dataset in reader.output():
-            self.add_dataset(dataset)
-            N_max = int(self.N_max_textbox.text())
-            if dataset.n_points() > N_max:
-                sampling = RandomSampling(dataset, N_max)
-                dataset = sampling
+        N_max = int(self.N_max_textbox.text())
+        if dataset.n_points() > N_max:
+            sampling = RandomSampling(dataset, N_max)
+            dataset = sampling
 
-            # embedding = TSNEEmbedding(dataset, n_iter=1500)
-            embedding = MDSEmbedding(dataset, n_components=2)
-            embedding.data_ready.connect(self.imp_app.gl_widget.show_dataset)
-
-        self._workers.remove(reader)
+        if dataset.n_dimensions(count_hidden=False) > 2:
+            dataset = MDSEmbedding(dataset, n_components=2)
+        
+        dataset.data_ready.connect(self.imp_app.gl_widget.show_dataset)
 
     @pyqtSlot(object)
     def add_dataset(self, dataset):
@@ -193,11 +189,14 @@ class DatasetsWidget(QGroupBox):
         urls = drop_event.mimeData().urls()
         paths = [url.path() for url in urls]
 
-        reader = Reader()
-        reader.set_parameters({'paths': paths})
-        reader.has_results.connect(self.handle_reader_results)
-        reader.start()
+        # reader = Reader()
+        # reader.set_parameters({'paths': paths})
+        # reader.has_results.connect(self.handle_reader_results)
+        # reader.start()
+        dataset = InputDataset(paths)
+        self.add_dataset(dataset)
+        dataset.data_ready.connect(self.handle_reader_results)
 
         self.imp_app.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
-        self._workers.add(reader)
+        self._workers.add(dataset)
 

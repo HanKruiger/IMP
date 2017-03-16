@@ -144,10 +144,11 @@ class DatasetsView:
         shader_program = gl_widget.shader_program
 
         for dataset, viewed_dataset in self._viewed_datasets.items():
-            # if viewed_dataset['kind'] == 'regular':
-            shader_program.setUniformValue('point_size', gl_widget.point_size)
-            # elif viewed_dataset['kind'] == 'representatives':
-            #     shader_program.setUniformValue('point_size', 1.5*gl_widget.point_size)
+            if viewed_dataset['kind'] == 'regular':
+                shader_program.setUniformValue('observation_type', 0)
+            elif viewed_dataset['kind'] == 'representatives':
+                shader_program.setUniformValue('observation_type', 1)
+            
             vao = viewed_dataset['vao']
             vao.bind()
             gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
