@@ -61,7 +61,6 @@ class OpenGLWidget(QOpenGLWidget):
     def schedule_for_show(self, dataset, representatives):
         self.waitfor = MultiWait((dataset, representatives))
         def callback():
-            print('Deleting waitfor')
             self.show_dataset(dataset, representatives=representatives)
         
         def after_animation():
@@ -69,7 +68,6 @@ class OpenGLWidget(QOpenGLWidget):
             if self.waitfor.is_ready():
                 callback()
             else:
-                print('Connecting waitfor')
                 self.waitfor.ready.connect(callback)
 
         self.animation_done.connect(after_animation)

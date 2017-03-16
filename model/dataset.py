@@ -32,21 +32,25 @@ class Dataset(QObject):
 
         self._data = data
 
-        if data is None:
-            self._is_ready = False
-        else:
-            self._is_ready = True
+        try:
+            if self.is_ready():
+                pass
+        except AttributeError:
+            if data is None:
+                self._is_ready = False
+            else:
+                self._is_ready = True
 
         if parent is not None:
             parent.add_child(self)
 
     def n_points(self):
-        if self.data() is None:
+        if not self.is_ready():
             return None
         return self.data().shape[0]
 
     def n_dimensions(self):
-        if self.data() is None:
+        if not self.is_ready():
             return None
         if len(self.data().shape) < 2:
             return 1
@@ -193,9 +197,9 @@ class Selection(Dataset):
         if name is None:
             name = 'S({})'.format(parent.name())
         self._idcs_in_parent = idcs
-        super().__init__(name, parent, None, hidden=hidden)
         if idcs is not None:
             self._is_ready = True
+        super().__init__(name, parent, None, hidden=hidden)
 
     def data(self):
         if self.is_ready():
