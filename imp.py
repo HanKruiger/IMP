@@ -6,7 +6,7 @@ from PyQt5.QtCore import *
 
 import sys
 
-from widgets.imp_app import ImpApp
+from widgets import *
 
 if __name__ == '__main__':
     qsf = QSurfaceFormat()
@@ -18,6 +18,6 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    imp = ImpApp()
+    imp = IMPWindow()
 
     sys.exit(app.exec_())

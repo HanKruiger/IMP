@@ -42,7 +42,7 @@ out vec4 out_color;
 void main() {
 	bool isRepresentative = observation_type == 1;
 	
-	float dist_from_border = 0.0;
+	float dist_from_border;
 	if (!isRepresentative) {
 		vec2 circCoord = 2.0 * gl_PointCoord - 1.0;
 		float radius = dot(circCoord, circCoord);

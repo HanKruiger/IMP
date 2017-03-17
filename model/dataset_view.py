@@ -8,12 +8,21 @@ import numpy as np
 from model import *
 
 
-class DatasetsView:
+class DatasetView:
 
     def __init__(self, previous=None):
         self._viewed_datasets = dict()
         self.shader_program = None
-        self.previous = previous
+        self._previous = previous
+        self._is_active = False
+
+    def previous(self):
+        if self._previous is None:
+            raise ValueError
+        return self._previous
+
+    def is_active(self):
+        return self._is_active
 
     def add_dataset(self, dataset, kind):
         self._viewed_datasets[dataset] = {
@@ -32,12 +41,6 @@ class DatasetsView:
         root = datasets[0].root()
         assert(all([dataset.root == root for dataset in self.datasets()]))
         return root
-
-    # def make_selection(self):
-    #     union = self.datasets()[0]
-    #     for dataset in self.datasets()[1:]:
-    #         union = Union(union, dataset)
-    #     return union
 
     def get_bounds(self):
         datasets = self.datasets()
@@ -105,6 +108,7 @@ class DatasetsView:
 
             for dim in range(dataset.n_dimensions()):
                 viewed_dataset['vbos'][dim] = self.make_vbo(dataset, dim)
+        self._is_active = True
 
     def enable_attributes(self, shader_program, gl):
         self.shader_program = shader_program
@@ -138,11 +142,9 @@ class DatasetsView:
                 vbo.release()
 
             vao.release()
+        self._is_active = True
 
-    def draw(self, gl_widget):
-        gl = gl_widget.gl
-        shader_program = gl_widget.shader_program
-
+    def draw(self, gl, shader_program):
         for dataset, viewed_dataset in self._viewed_datasets.items():
             if viewed_dataset['kind'] == 'regular':
                 shader_program.setUniformValue('observation_type', 0)
@@ -165,12 +167,13 @@ class DatasetsView:
 
             vao.release()
 
-    def destroy(self):
+    def disable(self):
         if self.shader_program is not None:
             self.disable_attributes()
         for viewed_dataset in self._viewed_datasets.values():
             for vbo in viewed_dataset['vbos'].values():
                 vbo.destroy()
+        self._is_active = False
 
     def __iter__(self):
         return iter(self._viewed_datasets.items())

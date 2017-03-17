@@ -2,17 +2,17 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+from functools import partial
 from model import *
-# from model.embeddings import *
-# from model.datasets_view import DatasetsView
 
 import numpy as np
 
 class DatasetsWidget(QGroupBox):
 
-    def __init__(self, imp_app):
+    def __init__(self, imp_window):
         super().__init__('Datasets')
-        self.imp_app = imp_app
+        self.imp_window = imp_window
+        self.dataset_view_renderer = self.imp_window.gl_widget.dataset_view_renderer
 
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(['Name', 'N', 'm'])
@@ -23,8 +23,6 @@ class DatasetsWidget(QGroupBox):
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
         self.tree_view.doubleClicked.connect(self.show_dataset_item)
-
-        self._workers = set()
 
         # Resize column widths
         for i in range(self.model.columnCount()):
@@ -43,10 +41,6 @@ class DatasetsWidget(QGroupBox):
         self.setLayout(self.vbox_main)
 
         self.setAcceptDrops(True)
-
-    def worker_done(self, dataset, worker):
-        self._workers.remove(worker)
-        self.imp_app.gl_widget.show_dataset(dataset)
 
     def datasets(self):
         datasets = set()
@@ -86,17 +80,37 @@ class DatasetsWidget(QGroupBox):
             self.model.index(topleft.row(), 2, self.model.parent(topleft)), dataset.n_dimensions()
         )
 
-    # @pyqtSlot(int) Somehow I cannot decorate this!
+    @pyqtSlot(QModelIndex)
     def show_dataset_item(self, item):
         dataset = self.model.data(item, role=Qt.UserRole)
         if dataset is None:
             return
-        self.imp_app.gl_widget.show_dataset(dataset)
+        self.dataset_view_renderer.show_dataset(dataset, fit_to_view=False)
         
+
+    def hierarchical_zoom(self, zoomin=True):
+        if zoomin:
+            # visibles, invisibles, union = self.dataset_view.filter_unseen_points(self.projection * self.view)
+            visibles, invisibles, union = self.dataset_view_renderer.filter_unseen_points()
+
+            if visibles is not None and invisibles is not None:
+                representatives_2d = Selection(union, idcs=visibles)
+
+                knn_fetching = KNNFetching(representatives_2d, invisibles.size)
+
+                # The KNN fetch MINUS the representatives.
+                new_neighbours_nd = Difference(knn_fetching, representatives_2d)
+
+                new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
+                new_neighbours_2d.ready.connect(
+                    partial(self.dataset_view_renderer.show_dataset, new_neighbours_2d, representatives_2d)
+                )
+        else:
+            raise NotImplementedError
 
     @pyqtSlot(object)
     def handle_reader_results(self, dataset):
-        self.imp_app.statusBar().clearMessage()
+        self.imp_window.statusBar().clearMessage()
         N_max = int(self.N_max_textbox.text())
         if dataset.n_points() > N_max:
             sampling = RandomSampling(dataset, N_max)
@@ -105,7 +119,9 @@ class DatasetsWidget(QGroupBox):
         if dataset.n_dimensions(count_hidden=False) > 2:
             dataset = MDSEmbedding(dataset, n_components=2)
         
-        dataset.data_ready.connect(self.imp_app.gl_widget.show_dataset)
+        dataset.ready.connect(
+            partial(self.dataset_view_renderer.show_dataset, dataset, fit_to_view=True)
+        )
 
     @pyqtSlot(object)
     def add_dataset(self, dataset):
@@ -136,11 +152,10 @@ class DatasetsWidget(QGroupBox):
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
 
-        self.imp_app.statusBar().showMessage('Added dataset.', msecs=2000)
+        self.imp_window.statusBar().showMessage('Added dataset.', msecs=2000)
 
     def remove_dataset(self, dataset):
-        if dataset in self.imp_app.gl_widget.datasets_view.datasets():
-            self.imp_app.gl_widget.clear_datasets_view()
+        self.dataset_view_renderer.remove_dataset(dataset)
 
         dataset.destroy()
         if dataset.parent() is not None:
@@ -161,12 +176,7 @@ class DatasetsWidget(QGroupBox):
 
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')
-
-            @pyqtSlot()
-            def delete_dataset():
-                self.remove_dataset(dataset)
-
-            delete_action.triggered.connect(delete_dataset)
+            delete_action.triggered.connect(partial(self.remove_dataset, dataset))
 
         # Makes sure the menu pops up where the mouse pointer is.
         menu.exec_(self.tree_view.viewport().mapToGlobal(position))
@@ -179,24 +189,19 @@ class DatasetsWidget(QGroupBox):
             elif not all([url.isLocalFile() for url in urls]):
                 qDebug('Non-local URL(s): {0}'.format([url.toString() for url in urls if not url.isLocalFile()]))
             else:
-                self.imp_app.statusBar().showMessage('Drop to load {0} as new dataset'.format(', '.join([url.fileName() for url in urls])))
+                self.imp_window.statusBar().showMessage('Drop to load {0} as new dataset'.format(', '.join([url.fileName() for url in urls])))
                 drag_enter_event.acceptProposedAction()
 
     def dragLeaveEvent(self, drag_leave_event):
-        self.imp_app.statusBar().clearMessage()
+        self.imp_window.statusBar().clearMessage()
 
     def dropEvent(self, drop_event):
         urls = drop_event.mimeData().urls()
         paths = [url.path() for url in urls]
 
-        # reader = Reader()
-        # reader.set_parameters({'paths': paths})
-        # reader.has_results.connect(self.handle_reader_results)
-        # reader.start()
         dataset = InputDataset(paths)
         self.add_dataset(dataset)
         dataset.data_ready.connect(self.handle_reader_results)
 
-        self.imp_app.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
-        self._workers.add(dataset)
+        self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
 

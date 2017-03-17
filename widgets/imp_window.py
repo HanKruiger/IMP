@@ -4,12 +4,10 @@ from PyQt5.QtCore import *
 
 import numpy as np
 
-from widgets.opengl_widget import OpenGLWidget
-from widgets.datasets_widget import DatasetsWidget
-from widgets.visuals_widget import VisualsWidget
+from widgets import GLWidget, VisualsWidget, DatasetsWidget
 
 
-class ImpApp(QMainWindow):
+class IMPWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
@@ -17,7 +15,7 @@ class ImpApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.gl_widget = OpenGLWidget(self)
+        self.gl_widget = GLWidget(self)
         self.setCentralWidget(self.gl_widget)
         toolbar = self.addToolBar('Toolbar')
 
@@ -27,7 +25,7 @@ class ImpApp(QMainWindow):
         quit_action.triggered.connect(qApp.quit)
         toolbar.addAction(quit_action)
 
-        self.datasets_widget = DatasetsWidget(imp_app=self)
+        self.datasets_widget = DatasetsWidget(imp_window=self)
         dataset_bar = QToolBar('Datasets')
         dataset_bar.addWidget(self.datasets_widget)
         self.addToolBar(Qt.LeftToolBarArea, dataset_bar)
@@ -35,7 +33,7 @@ class ImpApp(QMainWindow):
         visual_options_bar = QToolBar('Visual options')
         self.addToolBar(Qt.RightToolBarArea, visual_options_bar)
 
-        self.visuals_widget = VisualsWidget(imp_app=self)
+        self.visuals_widget = VisualsWidget(imp_window=self)
         visual_options_bar.addWidget(self.visuals_widget)
 
         self.center()
