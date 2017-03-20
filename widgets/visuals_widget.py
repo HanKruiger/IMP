@@ -6,7 +6,7 @@ from PyQt5.QtCore import *
 class VisualsWidget(QGroupBox):
 
     def __init__(self, imp_window):
-        super().__init__('Visual attributes')
+        super().__init__('Visual parameters')
         self.imp_window = imp_window
         vbox_main = QVBoxLayout()
         self.setLayout(vbox_main)
@@ -42,9 +42,9 @@ class Slider(QSlider):
         super().__init__(direction)
         self.setMinimum(0)
         self.setMaximum(n_steps)
-        self.setValue(int(n_steps * (default_value - mini) / (maxi - mini)))
         self._maxi = maxi
         self._mini = mini
+        self.set(default_value)
 
     def set(self, value):
         self.setValue(self.minimum() + (value - self._mini) / (self._maxi - self._mini) * (self.maximum() - self.minimum()))

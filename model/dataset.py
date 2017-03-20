@@ -24,6 +24,7 @@ class Dataset(QObject):
         self._name = name
         self._parent = parent
         self._n_hidden_features = hidden
+        self._n_points = None
 
         self._workers = set()
         self._children = []
@@ -44,6 +45,8 @@ class Dataset(QObject):
             parent.add_child(self)
 
     def n_points(self):
+        if self._n_points is not None:
+            return self._n_points
         if not self.is_ready():
             return None
         return self.data().shape[0]
@@ -244,7 +247,7 @@ class Selection(Dataset):
         return self.parent().root()
 
     def indices_in_root(self):
-        return self.parent().indices_in_root()[self._idcs_in_parent]
+        return self.parent().indices_in_root()[self.indices_in_parent()]
 
     def indices_in_parent(self):
         return self._idcs_in_parent
@@ -359,9 +362,21 @@ class RootSelection(Selection):
     def __init__(self, selection, hidden=None):
         if hidden is None:
             hidden = selection.hidden_features()
-        parent = selection.root()
-        idcs = selection.indices_in_root()
-        super().__init__(name='RS({})'.format(selection.name()), parent=parent, idcs=idcs, hidden=hidden)
+        name = 'RS({})'.format(selection.name())
+        super().__init__(selection.root(), idcs=None, name=name, hidden=hidden)
+
+        root_selector = RootSelection.RootSelector(selection)
+        self.spawn_thread(root_selector, self.set_indices_in_parent, waitfor=(selection,))
+
+    class RootSelector(Dataset.Worker):
+
+        def __init__(self, selection):
+            super().__init__()
+            self.selection = selection
+
+        def work(self):
+            idcs_in_root = self.selection.indices_in_root()
+            self.ready.emit(idcs_in_root)
 
 
 class MultiWait(QObject):

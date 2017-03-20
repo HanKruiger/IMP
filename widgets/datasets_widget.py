@@ -27,16 +27,22 @@ class DatasetsWidget(QGroupBox):
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
         
-        N_max_hbox = QHBoxLayout()
+        params_vbox = QVBoxLayout()
         self.N_max_textbox = QLineEdit()
         self.N_max_textbox.setValidator(QIntValidator())
-        self.N_max_textbox.setText(str(100))
-        N_max_hbox.addWidget(QLabel('N_max'))
-        N_max_hbox.addWidget(self.N_max_textbox)
+        self.N_max_textbox.setText(str(500))
+        params_vbox.addWidget(QLabel('Maximum number of points'))
+        params_vbox.addWidget(self.N_max_textbox)
+
+        self.repr_max_textbox = QLineEdit()
+        self.repr_max_textbox.setValidator(QIntValidator())
+        self.repr_max_textbox.setText(str(50))
+        params_vbox.addWidget(QLabel('Maximum number of representatives'))
+        params_vbox.addWidget(self.repr_max_textbox)
 
         self.vbox_main = QVBoxLayout()
         self.vbox_main.addWidget(self.tree_view)
-        self.vbox_main.addLayout(N_max_hbox)
+        self.vbox_main.addLayout(params_vbox)
         self.setLayout(self.vbox_main)
 
         self.setAcceptDrops(True)
@@ -92,7 +98,9 @@ class DatasetsWidget(QGroupBox):
             visibles, invisibles, union = self.dataset_view_renderer.filter_unseen_points()
 
             if visibles is not None and invisibles is not None:
-                representatives_2d = Selection(union, idcs=visibles)
+                n_samples = int(self.repr_max_textbox.text())
+                print('Taking {} samples from {} points.'.format(n_samples, visibles.size))
+                representatives_2d = RandomSampling(Selection(union, idcs=visibles), n_samples)
 
                 knn_fetching = KNNFetching(representatives_2d, invisibles.size)
 
@@ -110,16 +118,22 @@ class DatasetsWidget(QGroupBox):
     def handle_reader_results(self, dataset):
         self.imp_window.statusBar().clearMessage()
         N_max = int(self.N_max_textbox.text())
+        n_samples = int(self.repr_max_textbox.text())
         if dataset.n_points() > N_max:
             sampling = RandomSampling(dataset, N_max)
             dataset = sampling
 
+        representatives_2d = None
         if dataset.n_dimensions(count_hidden=False) > 2:
-            dataset = MDSEmbedding(dataset, n_components=2)
+            representatives_nd = RandomSampling(dataset, n_samples)
+            representatives_2d = MDSEmbedding(representatives_nd, n_components=2)
+            
+            dataset_diff = Difference(dataset, representatives_nd)
+            dataset_emb = LAMPEmbedding(dataset, representatives_2d)
+            dataset_emb.ready.connect(
+                lambda: self.dataset_view_renderer.show_dataset(dataset_emb, representatives_2d, fit_to_view=True)
+            )
         
-        dataset.ready.connect(
-            lambda: self.dataset_view_renderer.show_dataset(dataset, fit_to_view=True)
-        )
 
     @pyqtSlot(object)
     def add_dataset(self, dataset):

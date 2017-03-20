@@ -27,6 +27,7 @@ class RandomSampling(Selection):
 
         super().__init__(parent, idcs=None, name=name, hidden=hidden)
 
+        self._n_points = n_samples
         self._n_dimensions = parent.n_dimensions()
 
         sampler = RandomSampling.RandomSamplingWorker(parent, n_samples)

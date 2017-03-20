@@ -137,10 +137,10 @@ class LAMPEmbedding(Embedding):
 
         def work(self):
             # Hide hidden features
-
             X_s, _ = self.representatives_nd.data(split_hidden=True)
             Y_s, _ = self.representatives_2d.data(split_hidden=True)
             X_use, X_hidden = self.parent.data(split_hidden=True)
+            print('Doing LAMP with {} representatives and {} regulars.'.format(X_s.shape[0], X_use.shape[0]))
 
             N = X_use.shape[0]
             n = Y_s.shape[1]
