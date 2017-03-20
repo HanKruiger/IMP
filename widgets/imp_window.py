@@ -45,3 +45,6 @@ class IMPWindow(QMainWindow):
         center_point = QDesktopWidget().availableGeometry().center()
         rect.moveCenter(center_point)
         self.move(rect.topLeft())
+
+    def vis_params(self):
+        return self.visuals_widget

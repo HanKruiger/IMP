@@ -29,6 +29,9 @@ class DatasetViewRenderer(QObject):
         self.zoom_animation_timer = QTimer()
         self.zoom_animation_timer.timeout.connect(self.zoom_animation)
 
+    def vis_params(self):
+        return self.gl_widget.imp_window.vis_params()
+
     def init_gl(self, gl):
         self.gl = gl
         self.init_shaders()
@@ -72,6 +75,11 @@ class DatasetViewRenderer(QObject):
             dataset_view.add_dataset(representatives, 'representatives')
 
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
+        if representatives is not None:
+            self.vis_params().set('new_points_interpolation', 0.0)
+        else:
+            self.vis_params().set('new_points_interpolation', 1.0)
+
 
     def show_dataset_view(self, dataset_view, fit_to_view=False):
         self.dataset_views.append(dataset_view)
@@ -120,11 +128,13 @@ class DatasetViewRenderer(QObject):
         self.shader_program.bind()
 
         self.shader_program.setUniformValue('projection', self.projection)
-        self.shader_program.setUniformValue('opacity', self.gl_widget.opacity)
-        self.shader_program.setUniformValue('point_size', self.gl_widget.point_size)
+        self.shader_program.setUniformValue('opacity', self.vis_params().get('opacity'))
+        self.shader_program.setUniformValue('point_size', self.vis_params().get('point_size'))
         self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('view_new', self.view_new)
         self.shader_program.setUniformValue('f_view_transition', float(self.view_transition))
+
+        self.shader_program.setUniformValue('new_points_interpolation', self.vis_params().get('new_points_interpolation'))
 
         if len(self.dataset_views) > 0 and self.dataset_views[-1].is_active():
             self.dataset_views[-1].draw(self.gl, self.shader_program)

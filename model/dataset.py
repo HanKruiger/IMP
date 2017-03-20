@@ -5,7 +5,6 @@ from PyQt5.QtCore import *
 import os
 import abc
 import numpy as np
-from functools import partial
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -128,6 +127,9 @@ class Dataset(QObject):
         else:
             return self.parent().indices_in_root()[self.indices_in_parent()]
 
+    def data_in_root(self, split_hidden=False):
+        return self.root().data(split_hidden=split_hidden)[self.indices_in_root(), :]
+
     def hidden_features(self):
         return self._n_hidden_features
 
@@ -148,7 +150,9 @@ class Dataset(QObject):
         thread.finished.connect(thread.deleteLater)
 
         # Clean up reference to worker when finished
-        thread.finished.connect(partial(self.remove_worker, worker))
+        thread.finished.connect(
+            lambda: self.remove_worker(worker)
+        )
 
         if waitfor is not None:
             waitfor = MultiWait(waitfor)

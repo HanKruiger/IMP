@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-from functools import partial
 from model import *
 
 import numpy as np
@@ -90,7 +89,6 @@ class DatasetsWidget(QGroupBox):
 
     def hierarchical_zoom(self, zoomin=True):
         if zoomin:
-            # visibles, invisibles, union = self.dataset_view.filter_unseen_points(self.projection * self.view)
             visibles, invisibles, union = self.dataset_view_renderer.filter_unseen_points()
 
             if visibles is not None and invisibles is not None:
@@ -103,7 +101,7 @@ class DatasetsWidget(QGroupBox):
 
                 new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
                 new_neighbours_2d.ready.connect(
-                    partial(self.dataset_view_renderer.show_dataset, new_neighbours_2d, representatives_2d)
+                    lambda: self.dataset_view_renderer.show_dataset(new_neighbours_2d, representatives_2d)
                 )
         else:
             raise NotImplementedError
@@ -120,7 +118,7 @@ class DatasetsWidget(QGroupBox):
             dataset = MDSEmbedding(dataset, n_components=2)
         
         dataset.ready.connect(
-            partial(self.dataset_view_renderer.show_dataset, dataset, fit_to_view=True)
+            lambda: self.dataset_view_renderer.show_dataset(dataset, fit_to_view=True)
         )
 
     @pyqtSlot(object)
@@ -176,7 +174,7 @@ class DatasetsWidget(QGroupBox):
 
         if dataset.child_count() == 0:
             delete_action = menu.addAction('Delete')
-            delete_action.triggered.connect(partial(self.remove_dataset, dataset))
+            delete_action.triggered.connect(lambda: self.remove_dataset(dataset))
 
         # Makes sure the menu pops up where the mouse pointer is.
         menu.exec_(self.tree_view.viewport().mapToGlobal(position))

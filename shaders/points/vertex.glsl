@@ -3,10 +3,12 @@
 in float position_x;
 in float position_y;
 in float color;
+in float d_from_repr;
 
 uniform float f_view_transition;
 uniform float point_size;
-uniform highp int observation_type;
+uniform float new_points_interpolation;
+uniform int observation_type;
 uniform float opacity;
 uniform mat4 view;
 uniform mat4 view_new;
@@ -14,6 +16,7 @@ uniform mat4 projection;
 
 out float f_color;
 out float f_opacity;
+out float f_d_from_repr;
 out vec2 vertex_coordinate;
 
 void main() {
@@ -26,4 +29,5 @@ void main() {
 	
 	f_color = color;
 	f_opacity = opacity;
+	f_d_from_repr = d_from_repr;
 }

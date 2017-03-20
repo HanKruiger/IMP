@@ -32,10 +32,12 @@ vec3 colormap(float x) {
 	return vec3(r, g, b);
 }
 
-uniform highp int observation_type;
+uniform int observation_type;
+uniform float new_points_interpolation;
 
 in float f_color;
 in float f_opacity;
+in float f_d_from_repr;
 in vec2 vertex_coordinate;
 out vec4 out_color;
 
@@ -59,7 +61,15 @@ void main() {
 
 	float delta_dist_from_border = fwidth(dist_from_border);
 	/* Smooth transition on the border of the disk */
-	float alpha = f_opacity * smoothstep(0.0, delta_dist_from_border, dist_from_border);
+	float alpha = smoothstep(0.0, delta_dist_from_border, dist_from_border);
+
+	if (!isRepresentative){
+		alpha = f_opacity * smoothstep(0.0, delta_dist_from_border, dist_from_border);
+		alpha *= clamp(new_points_interpolation / f_d_from_repr, 0.0, 1.0);
+	} else {
+		alpha = smoothstep(0.0, delta_dist_from_border, dist_from_border);
+	}
+	
 	out_color = vec4(colormap(f_color), alpha);
 
 }

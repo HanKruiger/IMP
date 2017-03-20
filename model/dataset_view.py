@@ -4,6 +4,7 @@ from PyQt5.QtCore import *
 
 import os
 import numpy as np
+from scipy.spatial.distance import cdist
 
 from model import *
 
@@ -79,8 +80,8 @@ class DatasetView:
 
         return visible_idcs, invisible_idcs, union
 
-    def make_vbo(self, dataset, dim, normalize=False):
-        X_32 = np.array(dataset.data()[:, dim], dtype=np.float32)
+    def make_vbo(self, data, normalize=False):
+        X_32 = np.array(data, dtype=np.float32)
 
         if normalize:
             X_32 -= X_32.min()
@@ -101,13 +102,30 @@ class DatasetView:
         return vao
 
     def init_vaos_and_buffers(self):
+        representatives = None
+        for dataset, viewed_dataset in self._viewed_datasets.items():
+            if viewed_dataset['kind'] == 'representatives':
+                representatives = dataset
+                break
+        
         for dataset, viewed_dataset in self._viewed_datasets.items():
             assert(dataset.n_dimensions() == 3) # for now?
 
             viewed_dataset['vao'] = self.make_vao()
 
-            for dim in range(dataset.n_dimensions()):
-                viewed_dataset['vbos'][dim] = self.make_vbo(dataset, dim)
+            if viewed_dataset['kind'] == 'regular' and representatives is not None:
+                D = cdist(dataset.data_in_root(), representatives.data_in_root())
+                d_from_repr = D.min(axis=1)
+                d_from_repr -= d_from_repr.min()
+                d_from_repr /= d_from_repr.max()
+            else:
+                d_from_repr = np.zeros(dataset.n_points())
+
+            viewed_dataset['vbos']['position_x'] = self.make_vbo(dataset.data()[:, 0])
+            viewed_dataset['vbos']['position_y'] = self.make_vbo(dataset.data()[:, 1])
+            viewed_dataset['vbos']['color'] = self.make_vbo(dataset.data()[:, 2])
+            viewed_dataset['vbos']['d_from_repr'] = self.make_vbo(d_from_repr)
+            
         self._is_active = True
 
     def enable_attributes(self, shader_program, gl):
@@ -119,11 +137,11 @@ class DatasetView:
 
             vao.bind()
 
-            for dim in range(dataset.n_dimensions()):
-                vbo = self.make_vbo(dataset, dim)
-                viewed_dataset['vbos'][dim] = vbo
+            # for dim in range(dataset.n_dimensions()):
+            #     vbo = self.make_vbo(dataset, dim)
+            #     viewed_dataset['vbos'][dim] = vbo
 
-            for attribute, vbo in zip(['position_x', 'position_y', 'color'], [viewed_dataset['vbos'][dim] for dim in range(dataset.n_dimensions())]):
+            for attribute, vbo in viewed_dataset['vbos'].items():
                 attrib_loc = shader_program.attributeLocation(attribute)
 
                 shader_program.enableAttributeArray(attrib_loc)

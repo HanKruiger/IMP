@@ -11,18 +11,43 @@ class VisualsWidget(QGroupBox):
         vbox_main = QVBoxLayout()
         self.setLayout(vbox_main)
 
-        pointsize_slider = QSlider(Qt.Horizontal)
-        pointsize_slider.setMinimum(1)
-        pointsize_slider.setMaximum(500)
-        pointsize_slider.valueChanged.connect(self.imp_window.gl_widget.set_pointsize)
-        pointsize_slider.setValue(64)
-        vbox_main.addWidget(QLabel('Point size'))
-        vbox_main.addWidget(pointsize_slider)
+        self.sliders = dict()
 
-        opacity_slider = QSlider(Qt.Horizontal)
-        opacity_slider.setMinimum(0)
-        opacity_slider.setMaximum(255)
-        opacity_slider.valueChanged.connect(self.imp_window.gl_widget.set_opacity)
-        opacity_slider.setValue(128)
+        self.sliders['point_size'] = Slider(1, 20, 8)
+        vbox_main.addWidget(QLabel('Point size'))
+        vbox_main.addWidget(self.sliders['point_size'])
+        self.sliders['point_size'].valueChanged.connect(self.imp_window.gl_widget.update)
+
+        self.sliders['opacity'] = Slider(0, 1, 0.6)
+        self.sliders['opacity'].valueChanged.connect(self.imp_window.gl_widget.update)
         vbox_main.addWidget(QLabel('Opacity'))
-        vbox_main.addWidget(opacity_slider)
+        vbox_main.addWidget(self.sliders['opacity'])
+
+        self.sliders['new_points_interpolation'] = Slider(0, 1, 1)
+        self.sliders['new_points_interpolation'].valueChanged.connect(self.imp_window.gl_widget.update)
+        vbox_main.addWidget(QLabel('Interpolation debugging'))
+        vbox_main.addWidget(self.sliders['new_points_interpolation'])
+    
+    def get(self, name):
+        slider = self.sliders[name]
+        return slider.get()
+
+    def set(self, name, value):
+        slider = self.sliders[name]
+        slider.set(value)
+
+class Slider(QSlider):
+
+    def __init__(self, mini=0, maxi=1, default_value=0, direction=Qt.Horizontal, n_steps=20):
+        super().__init__(direction)
+        self.setMinimum(0)
+        self.setMaximum(n_steps)
+        self.setValue(int(n_steps * (default_value - mini) / (maxi - mini)))
+        self._maxi = maxi
+        self._mini = mini
+
+    def set(self, value):
+        self.setValue(self.minimum() + (value - self._mini) / (self._maxi - self._mini) * (self.maximum() - self.minimum()))
+
+    def get(self):
+        return self._mini + ((self.value() - self.minimum()) / (self.maximum() - self.minimum())) * (self._maxi - self._mini)
