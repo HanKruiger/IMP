@@ -99,10 +99,14 @@ class DatasetsWidget(QGroupBox):
 
             if visibles is not None and invisibles is not None:
                 n_samples = int(self.repr_max_textbox.text())
-                print('Taking {} samples from {} points.'.format(n_samples, visibles.size))
-                representatives_2d = RandomSampling(Selection(union, idcs=visibles), n_samples)
+                N_max = int(self.N_max_textbox.text())
+                selection = Selection(union, idcs=visibles)
+                if n_samples < selection.n_points():
+                    representatives_2d = RandomSampling(selection, n_samples)
+                else:
+                    representatives_2d = selection
 
-                knn_fetching = KNNFetching(representatives_2d, invisibles.size)
+                knn_fetching = KNNFetching(selection, N_max - n_samples)
 
                 # The KNN fetch MINUS the representatives.
                 new_neighbours_nd = Difference(knn_fetching, representatives_2d)
