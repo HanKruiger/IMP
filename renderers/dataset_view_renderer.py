@@ -16,8 +16,6 @@ class DatasetViewRenderer(QObject):
 
         # Transforms points from world space to view space
         self.view = QMatrix4x4()
-        self.view_new = QMatrix4x4(self.view)
-        self.view_transition = 0.0
 
         # Transforms points from view space to clip space
         self.projection = QMatrix4x4()
@@ -26,8 +24,10 @@ class DatasetViewRenderer(QObject):
         # (inverse viewport transform)
         self.pixel = QMatrix4x4()
 
-        self.zoom_animation_timer = QTimer()
-        self.zoom_animation_timer.timeout.connect(self.zoom_animation)
+        self.fadein_interpolation = 0.0
+        self.fadein_animation_timer = QTimer()
+        self.fadein_animation_timer.timeout.connect(self.fadein_animation)
+
 
     def vis_params(self):
         return self.gl_widget.imp_window.vis_params()
@@ -58,7 +58,13 @@ class DatasetViewRenderer(QObject):
     def previous(self):
         try:
             self.show_dataset_view(self.current_view.previous())
-        except ValueError:
+        except AttributeError:
+            pass
+
+    def next(self):
+        try:
+            self.show_dataset_view(self.current_view.next())
+        except AttributeError:
             pass
 
     def add_to_schedule(self, dataset_view):
@@ -76,9 +82,10 @@ class DatasetViewRenderer(QObject):
 
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
         if representatives is not None:
-            self.vis_params().set('new_points_interpolation', 0.0)
+            self.fadein_interpolation = 0.0
+            self.fadein_animation_timer.start()
         else:
-            self.vis_params().set('new_points_interpolation', 1.0)
+            self.fadein_interpolation = 1.0
 
 
     def show_dataset_view(self, dataset_view, fit_to_view=False):
@@ -112,7 +119,6 @@ class DatasetViewRenderer(QObject):
             self.view.setToIdentity()
             self.view.scale(1 / dist_to_sides)
             self.view.translate(-center.x(), -center.y())
-            self.view_new = QMatrix4x4(self.view)
 
         self.gl_widget.update()
 
@@ -131,10 +137,7 @@ class DatasetViewRenderer(QObject):
         self.shader_program.setUniformValue('opacity', self.vis_params().get('opacity'))
         self.shader_program.setUniformValue('point_size', self.vis_params().get('point_size'))
         self.shader_program.setUniformValue('view', self.view)
-        self.shader_program.setUniformValue('view_new', self.view_new)
-        self.shader_program.setUniformValue('f_view_transition', float(self.view_transition))
-
-        self.shader_program.setUniformValue('new_points_interpolation', self.vis_params().get('new_points_interpolation'))
+        self.shader_program.setUniformValue('fadein_interpolation', self.fadein_interpolation)
 
         if len(self.dataset_views) > 0 and self.dataset_views[-1].is_active():
             self.dataset_views[-1].draw(self.gl, self.shader_program)
@@ -143,35 +146,28 @@ class DatasetViewRenderer(QObject):
 
     @pyqtSlot()
     def zoom(self, factor, pos):
-        # Don't zoom if already zooming.
-        if self.zoom_animation_timer.isActive():
-            return
         p_world = self.pixel_to_world(pos, d=3)
-        self.view_new = QMatrix4x4(self.view)
-        self.view_new.translate((1 - factor) * p_world)
-        self.view_new.scale(factor)
-        self.view_transition = 0.0
-        self.zoom_animation_timer.start(20)
+        self.view.translate((1 - factor) * p_world)
+        self.view.scale(factor)
 
-    def zoom_animation(self):
-        self.view_transition += 0.08
-        if self.view_transition >= 1:
-            self.zoom_animation_timer.stop()
-            self.animation_done.emit()
-            # Reset state to have new matrix as the view matrix
-            self.view = QMatrix4x4(self.view_new)
-            self.view_transition = 0.0
+    def translate(self, movement):
+        self.view.translate(self.pixel_to_world(movement, d=3, w=0))
 
+    def fadein_animation(self):
+        self.fadein_interpolation += 0.01
+        if self.fadein_interpolation >= 1:
+            self.fadein_interpolation = 1
+            self.fadein_animation_timer.stop()
         self.gl_widget.update()
 
-    def pixel_to_world(self, p_in, d=2):
+    def pixel_to_world(self, p_in, d=2, w=1):
         try:
             scalar = float(p_in)
-            p_pixel = QVector4D(scalar, 0, 0, 0)  # w = 0, since we want to transform a distance (no translations!).
+            p_pixel = QVector4D(scalar, 0, 0, w)
         except TypeError:
             p_pixel = QVector4D(p_in)
             if not isinstance(p_in, QVector4D):
-                p_pixel.setW(1)  # w = 1, since we assume a vector transformation (yes translations!).
+                p_pixel.setW(w)
 
         pixel_i, invertible = self.pixel.inverted()
         if not invertible:
@@ -214,3 +210,6 @@ class DatasetViewRenderer(QObject):
 
     def filter_unseen_points(self):
         return self.dataset_views[-1].filter_unseen_points(self.projection * self.view)
+
+    def current_union(self):
+        return self.dataset_views[-1].union()

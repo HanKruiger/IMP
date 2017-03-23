@@ -11,6 +11,7 @@ class KNNFetching(Selection):
             name = 'F({}, {})'.format(root.name(), query_2d.name())
         if hidden is None:
             hidden = root.hidden_features()
+        self._n_points = n_points
         super().__init__(root, idcs=None, name=name, hidden=hidden)
 
         query_nd = RootSelection(query_2d)

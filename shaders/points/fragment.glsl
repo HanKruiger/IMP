@@ -33,7 +33,7 @@ vec3 colormap(float x) {
 }
 
 uniform int observation_type;
-uniform float new_points_interpolation;
+uniform float fadein_interpolation;
 
 in float f_color;
 in float f_opacity;
@@ -65,7 +65,7 @@ void main() {
 
 	if (!isRepresentative){
 		alpha = f_opacity * smoothstep(0.0, delta_dist_from_border, dist_from_border);
-		alpha *= clamp(new_points_interpolation / f_d_from_repr, 0.0, 1.0);
+		alpha *= clamp(fadein_interpolation / f_d_from_repr, 0.0, 1.0);
 	} else {
 		alpha = smoothstep(0.0, delta_dist_from_border, dist_from_border);
 	}

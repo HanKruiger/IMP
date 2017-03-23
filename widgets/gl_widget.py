@@ -11,26 +11,19 @@ class GLWidget(QOpenGLWidget):
         self.setMouseTracking(True)
 
         self.dataset_view_renderer = DatasetViewRenderer(self)
-        self.mouse = QVector2D(0, 0)
 
     def previous_view(self):
         self.dataset_view_renderer.previous()
 
-    def set_pointsize(self, point_size):
-        self.point_size = float(point_size)**0.5
-        self.update()
-
-    # Receives value in 0-255 range
-    def set_opacity(self, opacity):
-        self.opacity = opacity / 255
-        self.update()
-
     def mouseMoveEvent(self, e):
-        self.mouse = QVector2D(e.pos())
-        self.update()
+        mouse = QVector2D(e.pos())
+        if e.buttons() == Qt.LeftButton:
+            self.dataset_view_renderer.translate(mouse - self.mouse_when_clicked)
+            self.mouse_when_clicked = mouse
+            self.update()
 
     def mousePressEvent(self, e):
-        self.mouse = QVector2D(e.pos())
+        self.mouse_when_clicked = QVector2D(e.pos())
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
@@ -38,14 +31,18 @@ class GLWidget(QOpenGLWidget):
             return
         wheel_event.accept()
 
-        factor = 1.05 ** wheel_event.pixelDelta().y()
+        factor = 1.01 ** wheel_event.pixelDelta().y()
         if QGuiApplication.keyboardModifiers() == Qt.ControlModifier:
             if factor > 1:
                 self.imp_window.datasets_widget.hierarchical_zoom()
+        elif QGuiApplication.keyboardModifiers() == Qt.ShiftModifier:
+            if factor > 1:
+                self.dataset_view_renderer.next()
             else:
                 self.dataset_view_renderer.previous()
         else:
             self.dataset_view_renderer.zoom(factor, wheel_event.pos())
+            self.update()
 
     def minimumSizeHint(self):
         return QSize(50, 50)

@@ -3,46 +3,59 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from model import *
+from widgets import Slider
 
 import numpy as np
 
-class DatasetsWidget(QGroupBox):
+class DatasetsWidget(QWidget):
 
     def __init__(self, imp_window):
-        super().__init__('Datasets')
+        super().__init__()
         self.imp_window = imp_window
         self.dataset_view_renderer = self.imp_window.gl_widget.dataset_view_renderer
+
+        controls_group = QGroupBox('History')
+        row = QHBoxLayout()
+        previous_view_button = QPushButton('Back')
+        previous_view_button.clicked.connect(self.dataset_view_renderer.previous)
+        row.addWidget(previous_view_button)
+        next_view_button = QPushButton('Forward')
+        next_view_button.clicked.connect(self.dataset_view_renderer.next)
+        row.addWidget(next_view_button)
+        controls_group.setLayout(row)
 
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(['Name', 'N', 'm'])
         self.model.dataChanged.connect(self.data_changed)
 
+        tree_view_group = QGroupBox('Dataset tree view')
+        tree_view_layout = QVBoxLayout()
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
         self.tree_view.doubleClicked.connect(self.show_dataset_item)
+        tree_view_layout.addWidget(self.tree_view)
+        tree_view_group.setLayout(tree_view_layout) 
 
         # Resize column widths
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
         
-        params_vbox = QVBoxLayout()
-        self.N_max_textbox = QLineEdit()
-        self.N_max_textbox.setValidator(QIntValidator())
-        self.N_max_textbox.setText(str(500))
-        params_vbox.addWidget(QLabel('Maximum number of points'))
-        params_vbox.addWidget(self.N_max_textbox)
+        self.sliders = dict()
+        self.sliders['N_max'] = Slider('Maximum number of points', 50, 3000, 1000, data_type=int)
+        self.sliders['repr_max'] = Slider('Maximum number of representatives', 20, 100, 30, data_type=int)
 
-        self.repr_max_textbox = QLineEdit()
-        self.repr_max_textbox.setValidator(QIntValidator())
-        self.repr_max_textbox.setText(str(50))
-        params_vbox.addWidget(QLabel('Maximum number of representatives'))
-        params_vbox.addWidget(self.repr_max_textbox)
+        parameters_group = QGroupBox('Projection parameters')
+        parameters_layout = QVBoxLayout()
+        parameters_layout.addLayout(self.sliders['N_max'])
+        parameters_layout.addLayout(self.sliders['repr_max'])
+        parameters_group.setLayout(parameters_layout)
 
         self.vbox_main = QVBoxLayout()
-        self.vbox_main.addWidget(self.tree_view)
-        self.vbox_main.addLayout(params_vbox)
+        self.vbox_main.addWidget(controls_group)
+        self.vbox_main.addWidget(parameters_group)
+        self.vbox_main.addWidget(tree_view_group)
         self.setLayout(self.vbox_main)
 
         self.setAcceptDrops(True)
@@ -94,20 +107,23 @@ class DatasetsWidget(QGroupBox):
         
 
     def hierarchical_zoom(self, zoomin=True):
+        N_max = self.get('N_max')
         if zoomin:
-            visibles, invisibles, union = self.dataset_view_renderer.filter_unseen_points()
+            union = self.dataset_view_renderer.current_union()
+            visibles, invisibles = self.dataset_view_renderer.filter_unseen_points()
 
             if visibles is not None and invisibles is not None:
-                n_samples = int(self.repr_max_textbox.text())
-                print('Taking {} samples from {} points.'.format(n_samples, visibles.size))
-                representatives_2d = RandomSampling(Selection(union, idcs=visibles), n_samples)
+                n_samples = self.get('repr_max')
+                visible_points = Selection(union, idcs=visibles)
+                if visible_points.n_points() > n_samples:
+                    representatives_2d = RandomSampling(visible_points, n_samples)
+                else:
+                    representatives_2d = visible_points
 
-                knn_fetching = KNNFetching(representatives_2d, invisibles.size)
+                n_fetch = N_max - representatives_2d.n_points()
+                knn_fetching = KNNFetching(representatives_2d, n_fetch)
 
-                # The KNN fetch MINUS the representatives.
-                new_neighbours_nd = Difference(knn_fetching, representatives_2d)
-
-                new_neighbours_2d = LAMPEmbedding(new_neighbours_nd, representatives_2d)
+                new_neighbours_2d = LAMPEmbedding(knn_fetching, representatives_2d)
                 new_neighbours_2d.ready.connect(
                     lambda: self.dataset_view_renderer.show_dataset(new_neighbours_2d, representatives_2d)
                 )
@@ -117,8 +133,8 @@ class DatasetsWidget(QGroupBox):
     @pyqtSlot(object)
     def handle_reader_results(self, dataset):
         self.imp_window.statusBar().clearMessage()
-        N_max = int(self.N_max_textbox.text())
-        n_samples = int(self.repr_max_textbox.text())
+        N_max = self.get('N_max')
+        n_samples = self.get('repr_max')
         if dataset.n_points() > N_max:
             sampling = RandomSampling(dataset, N_max)
             dataset = sampling
@@ -129,7 +145,7 @@ class DatasetsWidget(QGroupBox):
             representatives_2d = MDSEmbedding(representatives_nd, n_components=2)
             
             dataset_diff = Difference(dataset, representatives_nd)
-            dataset_emb = LAMPEmbedding(dataset, representatives_2d)
+            dataset_emb = LAMPEmbedding(dataset_diff, representatives_2d)
             dataset_emb.ready.connect(
                 lambda: self.dataset_view_renderer.show_dataset(dataset_emb, representatives_2d, fit_to_view=True)
             )
@@ -217,3 +233,6 @@ class DatasetsWidget(QGroupBox):
 
         self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
 
+
+    def get(self, name):
+        return self.sliders[name].value()

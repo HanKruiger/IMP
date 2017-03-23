@@ -18,14 +18,18 @@ class DatasetView:
         self._is_active = False
 
     def previous(self):
-        if self._previous is None:
-            raise ValueError
+        self._previous._next = self
         return self._previous
+
+    def next(self):
+        assert(self._next._previous == self)
+        return self._next
 
     def is_active(self):
         return self._is_active
 
     def add_dataset(self, dataset, kind):
+        assert(dataset.is_ready())
         self._viewed_datasets[dataset] = {
             'kind': kind,
             'vao': None,
@@ -34,6 +38,18 @@ class DatasetView:
 
     def datasets(self):
         return [dataset for dataset in self._viewed_datasets.keys()]
+
+    def union(self):
+        try:
+            return self._union
+        except AttributeError:
+            datasets = self.datasets()
+            union = datasets[0]
+            for dataset in datasets[1:]:
+                union = Union(union, dataset, async=False)
+            self._union = union
+            return self._union
+
 
     def name(self):
         return ', '.join([dataset.name() for dataset in self.datasets()])
@@ -65,20 +81,21 @@ class DatasetView:
         projection_view = np.delete(projection_view, 2, axis=0)
         projection_view = np.delete(projection_view, 2, axis=1)
 
-        union = self.datasets()[0]
-        for dataset in self.datasets()[1:]:
-            union = Union(union, dataset, async=False)
+        # Build union of all datasets in the current DatasetView
+        union = self.union()
 
         N = union.n_points()
         X = union.data()[:, :2]
         X = np.concatenate((X, np.ones((N, 1))), axis=1)
+
+        # Project points to clip space
         Y = X.dot(projection_view)
 
         Y_visible = np.abs(Y).max(axis=1) <= 1
         visible_idcs = np.where(Y_visible == True)[0]
         invisible_idcs = np.where(Y_visible == False)[0]
 
-        return visible_idcs, invisible_idcs, union
+        return visible_idcs, invisible_idcs
 
     def make_vbo(self, data, normalize=False):
         X_32 = np.array(data, dtype=np.float32)
@@ -136,10 +153,6 @@ class DatasetView:
             viewed_dataset['vao'] = vao
 
             vao.bind()
-
-            # for dim in range(dataset.n_dimensions()):
-            #     vbo = self.make_vbo(dataset, dim)
-            #     viewed_dataset['vbos'][dim] = vbo
 
             for attribute, vbo in viewed_dataset['vbos'].items():
                 attrib_loc = shader_program.attributeLocation(attribute)

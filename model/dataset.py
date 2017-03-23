@@ -24,7 +24,6 @@ class Dataset(QObject):
         self._name = name
         self._parent = parent
         self._n_hidden_features = hidden
-        self._n_points = None
 
         self._workers = set()
         self._children = []
@@ -45,23 +44,17 @@ class Dataset(QObject):
             parent.add_child(self)
 
     def n_points(self):
-        if self._n_points is not None:
-            return self._n_points
         if not self.is_ready():
             return None
         return self.data().shape[0]
 
     def n_dimensions(self, count_hidden=True):
-        try:
-            n_dims = self._n_dimensions
-        except AttributeError:
-            if not self.is_ready():
-                return None
-            if len(self.data().shape) < 2:
-                n_dims = 1
-            else:
-                n_dims = self.data().shape[1]
-            pass
+        if not self.is_ready():
+            return None
+        if len(self.data().shape) < 2:
+            n_dims = 1
+        else:
+            n_dims = self.data().shape[1]
 
         if not count_hidden:
             return n_dims - self._n_hidden_features
@@ -229,15 +222,28 @@ class Selection(Dataset):
     def __init__(self, parent, idcs=None, name=None, hidden=None):
         if name is None:
             name = 'S({})'.format(parent.name())
-        self._idcs_in_parent = idcs
+        
+        self._n_dimensions = parent.n_dimensions()
         if idcs is not None:
+            self._idcs_in_parent = idcs
+            self._n_points = idcs.size
             self._is_ready = True
         super().__init__(name, parent, None, hidden=hidden)
+
+    def n_points(self):
+        return self._n_points
+
+    def n_dimensions(self, count_hidden=True):
+        if not count_hidden:
+            return self._n_dimensions - self.hidden_features()
+        return self._n_dimensions
 
     def data(self, split_hidden=False):
         if self.is_ready():
             if split_hidden:
-                return (self.parent().data()[self.indices_in_parent(), :-self.hidden_features()], self.parent().data()[self.indices_in_parent(), -self.hidden_features():])
+                non_hidden = self.parent().data()[self.indices_in_parent(), :-self.hidden_features()]
+                hidden = self.parent().data()[self.indices_in_parent(), -self.hidden_features():]
+                return (non_hidden, hidden)
             else:
                 return self.parent().data()[self.indices_in_parent(), :]
         else:
@@ -255,6 +261,8 @@ class Selection(Dataset):
     @pyqtSlot(object)
     def set_indices_in_parent(self, idcs):
         self._idcs_in_parent = idcs
+        self._n_points = idcs.size
+        self._n_dimensions = self.parent().n_dimensions()
         self._is_ready = True
         self.data_changed()
 
@@ -317,10 +325,9 @@ class Union(Dataset):
     def data(self, split_hidden=False):
         if self._is_ready:
             if split_hidden:
-                return (
-                    np.row_stack((self._parent_1.data()[:, :-self.hidden_features()], self._parent_2.data()[:, :-self.hidden_features()])),
-                    np.row_stack((self._parent_1.data()[:, -self.hidden_features():], self._parent_2.data()[:, -self.hidden_features():]))
-                )
+                non_hidden = np.row_stack((self._parent_1.data()[:, :-self.hidden_features()], self._parent_2.data()[:, :-self.hidden_features()]))
+                hidden = np.row_stack((self._parent_1.data()[:, -self.hidden_features():], self._parent_2.data()[:, -self.hidden_features():]))
+                return (hidden, non_hidden)
             else:
                 return np.row_stack((self._parent_1.data(), self._parent_2.data()))
         else:
@@ -337,8 +344,8 @@ class Difference(Selection):
         if name is None:
             name = 'Difference({}, {})'.format(parent_1.name(), parent_2.name())
         # Use parent_1 as the legal parent (this is the only one that is indexed!)
+        self._n_points = None
         super().__init__(parent_1, name=name, hidden=hidden)
-
         differencer = Difference.Differencer(parent_1, parent_2)
         self.spawn_thread(differencer, self.set_indices_in_parent, waitfor=(parent_1, parent_2))
 
@@ -351,7 +358,6 @@ class Difference(Selection):
 
         def work(self):
             idcs_in_root = np.setdiff1d(self.parent_1.indices_in_root(), self.parent_2.indices_in_root())
-            # parent_1_idcs_s = sorted
             assert(np.all(self.parent_1.indices_in_root() == np.sort(self.parent_1.indices_in_root())))
             idcs_in_parent = np.searchsorted(self.parent_1.indices_in_root(), idcs_in_root)
             self.ready.emit(idcs_in_parent)
@@ -363,6 +369,7 @@ class RootSelection(Selection):
         if hidden is None:
             hidden = selection.hidden_features()
         name = 'RS({})'.format(selection.name())
+        self._n_points = selection.n_points()
         super().__init__(selection.root(), idcs=None, name=name, hidden=hidden)
 
         root_selector = RootSelection.RootSelector(selection)
