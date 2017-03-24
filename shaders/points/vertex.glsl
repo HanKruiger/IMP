@@ -8,7 +8,8 @@ in float d_from_repr;
 uniform float point_size;
 uniform float fadein_interpolation;
 uniform int observation_type;
-uniform float opacity;
+uniform float opacity_regular;
+uniform float opacity_representatives;
 uniform mat4 view;
 uniform mat4 projection;
 
@@ -24,6 +25,10 @@ void main() {
 	gl_PointSize = point_size;
 	
 	f_color = color;
-	f_opacity = opacity;
+	if (observation_type == 0)
+		f_opacity = opacity_regular;
+	else
+		f_opacity = opacity_representatives;
+
 	f_d_from_repr = d_from_repr;
 }

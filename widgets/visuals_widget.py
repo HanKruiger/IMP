@@ -15,12 +15,16 @@ class VisualsWidget(QGroupBox):
         self.sliders = dict()
 
         self.sliders['point_size'] = Slider('Point size', 1, 20, 8, data_type=float)
-        vbox_main.addLayout(self.sliders['point_size'])
         self.sliders['point_size'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
+        vbox_main.addLayout(self.sliders['point_size'])
 
-        self.sliders['opacity'] = Slider('Opacity', 0, 1, 0.6, data_type=float)
-        self.sliders['opacity'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
-        vbox_main.addLayout(self.sliders['opacity'])
+        self.sliders['opacity_regular'] = Slider('Opacity (regular points)', 0, 1, 0.6, data_type=float)
+        self.sliders['opacity_regular'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
+        vbox_main.addLayout(self.sliders['opacity_regular'])
+
+        self.sliders['opacity_representatives'] = Slider('Opacity (representatives)', 0, 1, 1, data_type=float)
+        self.sliders['opacity_representatives'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
+        vbox_main.addLayout(self.sliders['opacity_representatives'])
     
     def get(self, name):
         slider = self.sliders[name]

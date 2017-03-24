@@ -25,8 +25,8 @@ class DatasetViewRenderer(QObject):
         self.pixel = QMatrix4x4()
 
         self.fadein_interpolation = 0.0
-        self.fadein_animation_timer = QTimer()
-        self.fadein_animation_timer.timeout.connect(self.fadein_animation)
+        self.fadein_animation_timer = Timer(n_steps=120)
+        self.fadein_animation_timer.tick.connect(self.fadein_animation)
 
 
     def vis_params(self):
@@ -81,16 +81,16 @@ class DatasetViewRenderer(QObject):
             dataset_view.add_dataset(representatives, 'representatives')
 
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
-        if representatives is not None:
-            self.fadein_interpolation = 0.0
-            self.fadein_animation_timer.start()
-        else:
-            self.fadein_interpolation = 1.0
+        # if representatives is not None:
+        # else:
+        #     self.fadein_interpolation = 1.0
 
 
     def show_dataset_view(self, dataset_view, fit_to_view=False):
         self.dataset_views.append(dataset_view)
         self.set_current_view(dataset_view, fit_to_view=fit_to_view)
+        self.fadein_interpolation = 0.0
+        self.fadein_animation_timer.start(2000)
 
     def set_dataset_view(self, fit_to_view=False):
         dataset_view = self.dataset_views[-1]
@@ -134,7 +134,8 @@ class DatasetViewRenderer(QObject):
         self.shader_program.bind()
 
         self.shader_program.setUniformValue('projection', self.projection)
-        self.shader_program.setUniformValue('opacity', self.vis_params().get('opacity'))
+        self.shader_program.setUniformValue('opacity_regular', self.vis_params().get('opacity_regular'))
+        self.shader_program.setUniformValue('opacity_representatives', self.vis_params().get('opacity_representatives'))
         self.shader_program.setUniformValue('point_size', self.vis_params().get('point_size'))
         self.shader_program.setUniformValue('view', self.view)
         self.shader_program.setUniformValue('fadein_interpolation', self.fadein_interpolation)
@@ -153,11 +154,8 @@ class DatasetViewRenderer(QObject):
     def translate(self, movement):
         self.view.translate(self.pixel_to_world(movement, d=3, w=0))
 
-    def fadein_animation(self):
-        self.fadein_interpolation += 0.01
-        if self.fadein_interpolation >= 1:
-            self.fadein_interpolation = 1
-            self.fadein_animation_timer.stop()
+    def fadein_animation(self, t):
+        self.fadein_interpolation = t
         self.gl_widget.update()
 
     def pixel_to_world(self, p_in, d=2, w=1):
@@ -213,3 +211,28 @@ class DatasetViewRenderer(QObject):
 
     def current_union(self):
         return self.dataset_views[-1].union()
+
+class Timer(QTimer):
+
+    # Emits value between 0 and 1, indicating how far the timer is w.r.t. the total time
+    tick = pyqtSignal(float)
+
+    def __init__(self, n_steps):
+        super().__init__()
+        self._n_steps = n_steps
+        self._steps = 0
+        self.timeout.connect(self.step)
+
+    # Starts a timer, that will give _n_steps ticks in total_time milliseconds.
+    def start(self, total_time):
+        self._steps = 0
+        if self.isActive():
+            return
+        else:
+            super().start(total_time / self._n_steps)
+
+    def step(self):
+        self._steps += 1
+        self.tick.emit(self._steps / self._n_steps)
+        if self._steps == self._n_steps:
+            self.stop()
