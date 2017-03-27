@@ -32,12 +32,13 @@ class DatasetView:
     def is_active(self):
         return self._is_active
 
-    def add_dataset(self, dataset, kind):
+    def add_regular(self, dataset):
         assert(dataset.is_ready())
-        if kind == 'regular':
-            self._regulars.add(dataset)
-        elif kind == 'representative':
-            self._representatives.add(dataset)
+        self._regulars.add(dataset)
+
+    def add_representative(self, dataset):
+        assert(dataset.is_ready())
+        self._representatives.add(dataset)
 
     def representatives(self):
         assert(len(self._representatives) == 1)
@@ -71,7 +72,7 @@ class DatasetView:
 
     def get_bounds(self):
         datasets = self.datasets()
-        assert(all([dataset.n_dimensions() == 3 for dataset in datasets]))
+        assert(all([dataset.n_dimensions() >= 2 for dataset in datasets]))
 
         x_min = np.inf
         x_max = -np.inf
@@ -84,35 +85,16 @@ class DatasetView:
             y_max = max(y_max, dataset.data()[:, 1].max())
         return x_min, x_max, y_min, y_max
 
-    def filter_unseen_points(self, projection_view):
-        projection_view = np.array(projection_view.data()).reshape((4, 4))
-
-        # Delete z-entries in transformation matrix (it's 2D, not 3D).
-        projection_view = np.delete(projection_view, 2, axis=0)
-        projection_view = np.delete(projection_view, 2, axis=1)
-
-        # Build union of all datasets in the current DatasetView
-        union = self.union()
-
-        N = union.n_points()
-        X = union.data()[:, :2]
-        X = np.concatenate((X, np.ones((N, 1))), axis=1)
-
-        # Project points to clip space
-        Y = X.dot(projection_view)
-
-        Y_visible = np.abs(Y).max(axis=1) <= 1
-        visible_idcs = np.where(Y_visible == True)[0]
-        invisible_idcs = np.where(Y_visible == False)[0]
-
-        return visible_idcs, invisible_idcs
-
-    def make_vbo(self, data, normalize=False):
-        X_32 = np.array(data, dtype=np.float32)
+    def make_vbo(self, data, normalize=False, dtype=np.float32):
+        X_32 = np.atleast_2d(np.array(data, dtype=dtype))
 
         if normalize:
-            X_32 -= X_32.min()
-            X_32 /= X_32.max()
+            for dim in range(X_32.shape[1]):
+                X_32[:, dim] -= X_32[:, dim].min()
+                X_32[:, dim] /= X_32[:, dim].max()
+
+        if dtype == np.uint32:
+            print(X_32)
 
         vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
         vbo.create()
@@ -132,104 +114,151 @@ class DatasetView:
         self.shader_program = shader_program
 
         for dataset in self.datasets():
-            assert(dataset.n_dimensions() == 3)  # for now?
             self._vao[dataset] = self.make_vao()
-            self._vbo[(dataset, 'position_x')] = self.make_vbo(dataset.data()[:, 0])
-            self._vbo[(dataset, 'position_y')] = self.make_vbo(dataset.data()[:, 1])
-            self._vbo[(dataset, 'color')] = self.make_vbo(dataset.data()[:, 2])
-            
+
+            self._vbo[(dataset, 'v_position')] = self.make_vbo(dataset.data()[:, :2])
+            self._vbo[(dataset, 'v_position_new')] = self.make_vbo(np.zeros((dataset.n_points(), 2)))
+            self._vbo[(dataset, 'v_color')] = self.make_vbo(dataset.data()[:, -1])
+            self._vbo[(dataset, 'v_has_old')] = self.make_vbo(np.ones(dataset.n_points()), dtype=np.uint32)
+            self._vbo[(dataset, 'v_has_new')] = self.make_vbo(np.zeros(dataset.n_points()), dtype=np.uint32)
+
+            self._vao[dataset].bind()
+
+            position_loc = shader_program.attributeLocation('v_position')
+            shader_program.enableAttributeArray(position_loc)
+            self._vbo[(dataset, 'v_position')].bind()
+            shader_program.setAttributeBuffer(
+                position_loc,    # Attribute location
+                gl.GL_FLOAT,     # Data type of elements
+                0,               # Offset
+                2,               # Number of components per vertex
+                0                # Stride
+            )
+            self._vbo[(dataset, 'v_position')].release()
+
+            position_new_loc = shader_program.attributeLocation('v_position_new')
+            shader_program.enableAttributeArray(position_new_loc)
+            self._vbo[(dataset, 'v_position_new')].bind()
+            shader_program.setAttributeBuffer(
+                position_new_loc,    # Attribute location
+                gl.GL_FLOAT,     # Data type of elements
+                0,               # Offset
+                2,               # Number of components per vertex
+                0                # Stride
+            )
+            self._vbo[(dataset, 'v_position_new')].release()
+
+            has_old_loc = shader_program.attributeLocation('v_has_old')
+            shader_program.enableAttributeArray(has_old_loc)
+            self._vbo[(dataset, 'v_has_old')].bind()
+            shader_program.setAttributeBuffer(
+                has_old_loc,    # Attribute location
+                gl.GL_UNSIGNED_BYTE,     # Data type of elements
+                0,               # Offset
+                1,               # Number of components per vertex
+                0                # Stride
+            )
+            self._vbo[(dataset, 'v_has_old')].release()
+
+            has_new_loc = shader_program.attributeLocation('v_has_new')
+            shader_program.enableAttributeArray(has_new_loc)
+            self._vbo[(dataset, 'v_has_new')].bind()
+            shader_program.setAttributeBuffer(
+                has_new_loc,    # Attribute location
+                gl.GL_UNSIGNED_BYTE,     # Data type of elements
+                0,               # Offset
+                1,               # Number of components per vertex
+                0                # Stride
+            )
+            self._vbo[(dataset, 'v_has_new')].release()
+
+            color_loc = shader_program.attributeLocation('v_color')
+            shader_program.enableAttributeArray(color_loc)
+            self._vbo[(dataset, 'v_color')].bind()
+            shader_program.setAttributeBuffer(
+                color_loc,    # Attribute location
+                gl.GL_FLOAT,  # Data type of elements
+                0,            # Offset
+                1,            # Number of components per vertex
+                0             # Stride
+            )
+            self._vbo[(dataset, 'v_color')].release()
+
+            self._vao[dataset].release()
 
         representatives = self.representatives()
         for dataset in self._regulars:
             D = cdist(dataset.data_in_root(), representatives.data_in_root())
-            d_from_repr = D.min(axis=1)
-            d_from_repr -= d_from_repr.min()
-            d_from_repr /= d_from_repr.max()
+            dist_from_repr = D.min(axis=1)
+            dist_from_repr -= dist_from_repr.min()
+            dist_from_repr /= dist_from_repr.max()
 
-            self._vbo[(dataset, 'd_from_repr')] = self.make_vbo(d_from_repr)
+            self._vbo[(dataset, 'v_dist_from_repr')] = self.make_vbo(dist_from_repr)
 
-        self._is_active = True
-
-        for dataset in self.datasets():
             self._vao[dataset].bind()
-
-            for attribute in ['position_x', 'position_y', 'color']:
-                attrib_loc = shader_program.attributeLocation(attribute)
-
-                shader_program.enableAttributeArray(attrib_loc)
-
-                self._vbo[(dataset, attribute)].bind()
-
-                # Explain the format of the attribute buffer to the shader.
-                shader_program.setAttributeBuffer(
-                    attrib_loc,    # Attribute location
-                    gl.GL_FLOAT,       # Data type of elements
-                    0,                      # Offset
-                    1,                      # Number of components per vertex
-                    0                       # Stride
-                )
-
-                self._vbo[(dataset, attribute)].release()
-
-            self._vao[dataset].release()
-
-        for dataset in self._regulars:
-            self._vao[dataset].bind()
-
-            attrib_loc = shader_program.attributeLocation('d_from_repr')
-
-            shader_program.enableAttributeArray(attrib_loc)
-
-            self._vbo[(dataset, 'd_from_repr')].bind()
-
+            d_from_repr_loc = shader_program.attributeLocation('v_dist_from_repr')
+            shader_program.enableAttributeArray(d_from_repr_loc)
+            self._vbo[(dataset, 'v_dist_from_repr')].bind()
             # Explain the format of the attribute buffer to the shader.
             shader_program.setAttributeBuffer(
-                attrib_loc,    # Attribute location
+                d_from_repr_loc,   # Attribute location
                 gl.GL_FLOAT,       # Data type of elements
-                0,                      # Offset
-                1,                      # Number of components per vertex
-                0                       # Stride
+                0,                 # Offset
+                1,                 # Number of components per vertex
+                0                  # Stride
             )
-
-            self._vbo[(dataset, 'd_from_repr')].release()
-
+            self._vbo[(dataset, 'v_dist_from_repr')].release()
             self._vao[dataset].release()
 
         self._is_active = True
-
-    def draw(self, gl, shader_program):
-        shader_program.setUniformValue('observation_type', 0)
-        for dataset in self._regulars:
-            self._vao[dataset].bind()
-            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
-            self._vao[dataset].release()
-
-        shader_program.setUniformValue('observation_type', 1)
-        for dataset in self._representatives:
-            self._vao[dataset].bind()
-            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
-            self._vao[dataset].release()
 
     def disable(self):
         for dataset in self._representatives:
             self._vao[dataset].bind()
-            for attribute in ['position_x', 'position_y', 'color']:
-                self.shader_program.disableAttributeArray(attribute)
+            self.shader_program.disableAttributeArray('v_position')
+            self.shader_program.disableAttributeArray('v_position_new')
+            self.shader_program.disableAttributeArray('v_has_new')
+            self.shader_program.disableAttributeArray('v_has_old')
+            self.shader_program.disableAttributeArray('v_color')
             self._vao[dataset].release()
-            for attribute in ['position_x', 'position_y', 'color']:
-                self._vbo[(dataset, attribute)].destroy()
+            self._vbo[(dataset, 'v_position')].destroy()
+            self._vbo[(dataset, 'v_position_new')].destroy()
+            self._vbo[(dataset, 'v_has_new')].destroy()
+            self._vbo[(dataset, 'v_has_old')].destroy()
+            self._vbo[(dataset, 'v_color')].destroy()
             self._vao[dataset].destroy()
 
         for dataset in self._regulars:
             self._vao[dataset].bind()
-            for attribute in ['position_x', 'position_y', 'color', 'd_from_repr']:
-                self.shader_program.disableAttributeArray(attribute)
+            self.shader_program.disableAttributeArray('v_position')
+            self.shader_program.disableAttributeArray('v_position_new')
+            self.shader_program.disableAttributeArray('v_has_new')
+            self.shader_program.disableAttributeArray('v_has_old')
+            self.shader_program.disableAttributeArray('v_color')
+            self.shader_program.disableAttributeArray('v_dist_from_repr')
             self._vao[dataset].release()
-            for attribute in ['position_x', 'position_y', 'color', 'd_from_repr']:
-                self._vbo[(dataset, attribute)].destroy()
+            self._vbo[(dataset, 'v_position')].destroy()
+            self._vbo[(dataset, 'v_position_new')].destroy()
+            self._vbo[(dataset, 'v_has_new')].destroy()
+            self._vbo[(dataset, 'v_has_old')].destroy()
+            self._vbo[(dataset, 'v_color')].destroy()
+            self._vbo[(dataset, 'v_dist_from_repr')].destroy()
             self._vao[dataset].destroy()
 
         self._is_active = False
+
+    def draw(self, gl):
+        self.shader_program.setUniformValue('u_is_representative', 0)
+        for dataset in self._regulars:
+            self._vao[dataset].bind()
+            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
+            self._vao[dataset].release()
+
+        self.shader_program.setUniformValue('u_is_representative', 1)
+        for dataset in self._representatives:
+            self._vao[dataset].bind()
+            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
+            self._vao[dataset].release()
 
     def __iter__(self):
         return iter(self.datasets())

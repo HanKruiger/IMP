@@ -72,13 +72,13 @@ class DatasetViewRenderer(QObject):
 
     def remove_dataset(self, dataset):
         if dataset in self._current_view.datasets():
-            self.clear_dataset_view(self._current_view)
+            self.disable_dataset_view(self._current_view)
 
     def show_dataset(self, dataset, representatives=None, fit_to_view=False):
         dataset_view = DatasetView(previous=self.get_latest())
-        dataset_view.add_dataset(dataset, 'regular')
+        dataset_view.add_regular(dataset)
         if representatives is not None:
-            dataset_view.add_dataset(representatives, 'representative')
+            dataset_view.add_representative(representatives)
 
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
 
@@ -93,7 +93,7 @@ class DatasetViewRenderer(QObject):
 
     def set_current_view(self, dataset_view, fit_to_view=False):
         if self._current_view is not None:
-            self.clear_dataset_view(self._current_view)
+            self.disable_dataset_view(self._current_view)
 
         self.gl_widget.makeCurrent()
         dataset_view.enable(self.shader_program, self.gl)
@@ -118,7 +118,7 @@ class DatasetViewRenderer(QObject):
         self._current_view = dataset_view
         self.gl_widget.update()
 
-    def clear_dataset_view(self, dataset_view):
+    def disable_dataset_view(self, dataset_view):
         self.gl_widget.makeCurrent()
         dataset_view.disable()
         self.gl_widget.doneCurrent()
@@ -127,15 +127,15 @@ class DatasetViewRenderer(QObject):
     def draw(self):
         self.shader_program.bind()
 
-        self.shader_program.setUniformValue('projection', self.projection)
-        self.shader_program.setUniformValue('opacity_regular', self.vis_params().get('opacity_regular'))
-        self.shader_program.setUniformValue('opacity_representatives', self.vis_params().get('opacity_representatives'))
-        self.shader_program.setUniformValue('point_size', self.vis_params().get('point_size'))
-        self.shader_program.setUniformValue('view', self.view)
-        self.shader_program.setUniformValue('fadein_interpolation', self.fadein_interpolation)
+        self.shader_program.setUniformValue('u_projection', self.projection)
+        self.shader_program.setUniformValue('u_view', self.view)
+        self.shader_program.setUniformValue('u_opacity_regular', self.vis_params().get('opacity_regular'))
+        self.shader_program.setUniformValue('u_opacity_representatives', self.vis_params().get('opacity_representatives'))
+        self.shader_program.setUniformValue('u_point_size', self.vis_params().get('point_size'))
+        self.shader_program.setUniformValue('u_fadein_interpolation', self.fadein_interpolation)
 
-        if len(self.dataset_views) > 0 and self.dataset_views[-1].is_active():
-            self._current_view.draw(self.gl, self.shader_program)
+        if self._current_view is not None:
+            self._current_view.draw(self.gl)
 
         self.shader_program.release()
 
@@ -201,7 +201,28 @@ class DatasetViewRenderer(QObject):
         self.pixel.scale(1, -1)
 
     def filter_unseen_points(self):
-        return self.dataset_views[-1].filter_unseen_points(self.projection * self.view)
+        projection_view = self.projection * self.view
+        projection_view = np.array(projection_view.data()).reshape((4, 4))
+
+        # Delete z-entries in transformation matrix (it's 2D, not 3D).
+        projection_view = np.delete(projection_view, 2, axis=0)
+        projection_view = np.delete(projection_view, 2, axis=1)
+
+        # Build union of all datasets in the current DatasetView
+        union = self.current_union()
+
+        N = union.n_points()
+        X = union.data()[:, :2]
+        X = np.concatenate((X, np.ones((N, 1))), axis=1)
+
+        # Project points to clip space
+        Y = X.dot(projection_view)
+
+        Y_visible = np.abs(Y).max(axis=1) <= 1
+        visible_idcs = np.where(Y_visible == True)[0]
+        invisible_idcs = np.where(Y_visible == False)[0]
+
+        return visible_idcs, invisible_idcs
 
     def current_union(self):
         return self.dataset_views[-1].union()
