@@ -36,6 +36,12 @@ class DatasetView:
             'vbos': dict()
         }
 
+    def get(self, kind):
+        for dataset, viewed_dataset in self._viewed_datasets.items():
+            if viewed_dataset['kind'] == kind:
+                return dataset
+        raise KeyError
+
     def datasets(self):
         return [dataset for dataset in self._viewed_datasets.keys()]
 

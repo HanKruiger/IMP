@@ -46,8 +46,11 @@ class DatasetsWidget(QWidget):
         self.sliders['N_max'] = Slider('Maximum number of points', 50, 3000, 1000, data_type=int)
         self.sliders['repr_max'] = Slider('Maximum number of representatives', 20, 100, 30, data_type=int)
 
-        parameters_group = QGroupBox('Projection parameters')
+        parameters_group = QGroupBox('Projection control')
         parameters_layout = QVBoxLayout()
+        reproject_button = QPushButton('Reproject')
+        reproject_button.clicked.connect(self.reproject_current_view)
+        parameters_layout.addWidget(reproject_button)
         parameters_layout.addLayout(self.sliders['N_max'])
         parameters_layout.addLayout(self.sliders['repr_max'])
         parameters_group.setLayout(parameters_layout)
@@ -129,6 +132,18 @@ class DatasetsWidget(QWidget):
                 )
         else:
             raise NotImplementedError
+
+    def reproject_current_view(self):
+        current_view = self.dataset_view_renderer.current_view()
+        representatives = current_view.get('representatives')
+        regulars = current_view.get('regular')
+        representatidves_nd = RootSelection(representatives)
+        regulars_nd = RootSelection(regulars)
+        representatives_reprojected = MDSEmbedding(representatidves_nd)
+        regulars_reprojected = LAMPEmbedding(regulars_nd, representatives_reprojected)
+        regulars_reprojected.ready.connect(
+            lambda: self.dataset_view_renderer.show_dataset(regulars_reprojected, representatives_reprojected, fit_to_view=True)
+        )
 
     @pyqtSlot(object)
     def handle_reader_results(self, dataset):

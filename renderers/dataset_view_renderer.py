@@ -12,7 +12,7 @@ class DatasetViewRenderer(QObject):
         super().__init__()
         self.gl_widget = gl_widget
         self.dataset_views = []
-        self.current_view = None
+        self._current_view = None
 
         # Transforms points from world space to view space
         self.view = QMatrix4x4()
@@ -49,6 +49,9 @@ class DatasetViewRenderer(QObject):
 
         self.shader_program.link()
 
+    def current_view(self):
+        return self._current_view
+
     def get_latest(self):
         try:
             return self.dataset_views[-1]
@@ -57,13 +60,13 @@ class DatasetViewRenderer(QObject):
 
     def previous(self):
         try:
-            self.show_dataset_view(self.current_view.previous())
+            self.show_dataset_view(self._current_view.previous())
         except AttributeError:
             pass
 
     def next(self):
         try:
-            self.show_dataset_view(self.current_view.next())
+            self.show_dataset_view(self._current_view.next())
         except AttributeError:
             pass
 
@@ -71,8 +74,8 @@ class DatasetViewRenderer(QObject):
         self.dataset_views.append(dataset_view)
 
     def remove_dataset(self, dataset):
-        if dataset in self.current_view.datasets():
-            self.clear_dataset_view(self.current_view)
+        if dataset in self._current_view.datasets():
+            self.clear_dataset_view(self._current_view)
 
     def show_dataset(self, dataset, representatives=None, fit_to_view=False):
         dataset_view = DatasetView(previous=self.get_latest())
@@ -96,8 +99,8 @@ class DatasetViewRenderer(QObject):
         dataset_view = self.dataset_views[-1]
 
     def set_current_view(self, dataset_view, fit_to_view=False):
-        if self.current_view is not None:
-            self.clear_dataset_view(self.current_view)
+        if self._current_view is not None:
+            self.clear_dataset_view(self._current_view)
 
         self.gl_widget.makeCurrent()
         dataset_view.init_vaos_and_buffers()
@@ -122,7 +125,7 @@ class DatasetViewRenderer(QObject):
 
         self.gl_widget.update()
 
-        self.current_view = dataset_view
+        self._current_view = dataset_view
 
     def clear_dataset_view(self, dataset_view):
         self.gl_widget.makeCurrent()
