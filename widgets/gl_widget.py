@@ -9,8 +9,10 @@ class GLWidget(QOpenGLWidget):
         super().__init__()
         self.imp_window = imp_window
         self.setMouseTracking(True)
-
+        self.setFocusPolicy(Qt.StrongFocus)
         self.dataset_view_renderer = DatasetViewRenderer(self)
+        self.accept_hierarchical_zoom = False
+        self.accept_history_navigation = False
 
     def previous_view(self):
         self.dataset_view_renderer.previous()
@@ -23,6 +25,7 @@ class GLWidget(QOpenGLWidget):
             self.update()
 
     def mousePressEvent(self, e):
+        print(self.hasFocus())
         self.mouse_when_clicked = QVector2D(e.pos())
 
     def wheelEvent(self, wheel_event):
@@ -33,9 +36,17 @@ class GLWidget(QOpenGLWidget):
 
         factor = 1.01 ** wheel_event.pixelDelta().y()
         if QGuiApplication.keyboardModifiers() == Qt.ControlModifier:
+            if not self.accept_hierarchical_zoom:
+                return
+            self.accept_hierarchical_zoom = False
+            
             if factor > 1:
                 self.imp_window.datasets_widget.hierarchical_zoom()
         elif QGuiApplication.keyboardModifiers() == Qt.ShiftModifier:
+            if not self.accept_history_navigation:
+                return
+            self.accept_history_navigation = False
+
             if factor > 1:
                 self.dataset_view_renderer.next()
             else:
@@ -43,6 +54,14 @@ class GLWidget(QOpenGLWidget):
         else:
             self.dataset_view_renderer.zoom(factor, wheel_event.pos())
             self.update()
+
+    def keyPressEvent(self, key_event):
+        if key_event.key() == Qt.Key_Control:
+            self.accept_hierarchical_zoom = True
+        if key_event.key() == Qt.Key_Shift:
+            self.accept_history_navigation = True
+
+        key_event.accept()
 
     def minimumSizeHint(self):
         return QSize(50, 50)

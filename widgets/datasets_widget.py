@@ -236,6 +236,7 @@ class DatasetsWidget(QWidget):
 
     def dragLeaveEvent(self, drag_leave_event):
         self.imp_window.statusBar().clearMessage()
+        drag_leave_event.accept()
 
     def dropEvent(self, drop_event):
         urls = drop_event.mimeData().urls()
@@ -244,6 +245,11 @@ class DatasetsWidget(QWidget):
         dataset = InputDataset(paths)
         self.add_dataset(dataset)
         dataset.data_ready.connect(self.handle_reader_results)
+
+        drop_event.accept()
+
+        # Set focus to our window after the drop event.
+        self.activateWindow()
 
         self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
 

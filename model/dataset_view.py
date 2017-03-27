@@ -93,9 +93,6 @@ class DatasetView:
                 X_32[:, dim] -= X_32[:, dim].min()
                 X_32[:, dim] /= X_32[:, dim].max()
 
-        if dtype == np.uint32:
-            print(X_32)
-
         vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
         vbo.create()
         vbo.bind()

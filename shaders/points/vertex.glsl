@@ -20,14 +20,14 @@ out float f_opacity;
 out float f_dist_from_repr;
 
 void main() {
-	vec2 position;
-	if (v_has_old != 0 && v_has_new == 0){
-		position = v_position;
-	} else if (v_has_old != 0 && v_has_new != 0) {
-		position = mix(v_position, v_position_new, u_fadein_interpolation);
-	} else if (v_has_old == 0 && v_has_new != 0) {
-		position = v_position_new;
-	}
+	vec2 position = v_position;
+	// if (v_has_old != 0 && v_has_new == 0){
+	// 	position = v_position;
+	// } else if (v_has_old != 0 && v_has_new != 0) {
+	// 	position = mix(v_position, v_position_new, u_fadein_interpolation);
+	// } else if (v_has_old == 0 && v_has_new != 0) {
+	// 	position = v_position_new;
+	// }
 	
 	gl_Position = u_projection * u_view * vec4(position, 0.0, 1.0);
 	
