@@ -70,9 +70,6 @@ class DatasetViewRenderer(QObject):
         except AttributeError:
             pass
 
-    def add_to_schedule(self, dataset_view):
-        self.dataset_views.append(dataset_view)
-
     def remove_dataset(self, dataset):
         if dataset in self._current_view.datasets():
             self.clear_dataset_view(self._current_view)
@@ -81,13 +78,9 @@ class DatasetViewRenderer(QObject):
         dataset_view = DatasetView(previous=self.get_latest())
         dataset_view.add_dataset(dataset, 'regular')
         if representatives is not None:
-            dataset_view.add_dataset(representatives, 'representatives')
+            dataset_view.add_dataset(representatives, 'representative')
 
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
-        # if representatives is not None:
-        # else:
-        #     self.fadein_interpolation = 1.0
-
 
     def show_dataset_view(self, dataset_view, fit_to_view=False):
         self.dataset_views.append(dataset_view)
@@ -103,8 +96,7 @@ class DatasetViewRenderer(QObject):
             self.clear_dataset_view(self._current_view)
 
         self.gl_widget.makeCurrent()
-        dataset_view.init_vaos_and_buffers()
-        dataset_view.enable_attributes(self.shader_program, self.gl)
+        dataset_view.enable(self.shader_program, self.gl)
         self.gl_widget.doneCurrent()
 
         if fit_to_view:
@@ -123,9 +115,8 @@ class DatasetViewRenderer(QObject):
             self.view.scale(1 / dist_to_sides)
             self.view.translate(-center.x(), -center.y())
 
-        self.gl_widget.update()
-
         self._current_view = dataset_view
+        self.gl_widget.update()
 
     def clear_dataset_view(self, dataset_view):
         self.gl_widget.makeCurrent()
@@ -144,7 +135,7 @@ class DatasetViewRenderer(QObject):
         self.shader_program.setUniformValue('fadein_interpolation', self.fadein_interpolation)
 
         if len(self.dataset_views) > 0 and self.dataset_views[-1].is_active():
-            self.dataset_views[-1].draw(self.gl, self.shader_program)
+            self._current_view.draw(self.gl, self.shader_program)
 
         self.shader_program.release()
 

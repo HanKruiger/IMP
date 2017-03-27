@@ -7,6 +7,7 @@ from widgets import Slider
 
 import numpy as np
 
+
 class DatasetsWidget(QWidget):
 
     def __init__(self, imp_window):
@@ -36,12 +37,12 @@ class DatasetsWidget(QWidget):
         self.tree_view.customContextMenuRequested.connect(self.open_menu)
         self.tree_view.doubleClicked.connect(self.show_dataset_item)
         tree_view_layout.addWidget(self.tree_view)
-        tree_view_group.setLayout(tree_view_layout) 
+        tree_view_group.setLayout(tree_view_layout)
 
         # Resize column widths
         for i in range(self.model.columnCount()):
             self.tree_view.resizeColumnToContents(i)
-        
+
         self.sliders = dict()
         self.sliders['N_max'] = Slider('Maximum number of points', 50, 3000, 1000, data_type=int)
         self.sliders['repr_max'] = Slider('Maximum number of representatives', 20, 100, 30, data_type=int)
@@ -92,7 +93,7 @@ class DatasetsWidget(QWidget):
         # Read potentially new name from display role
         new_name = self.model.data(topleft, role=Qt.DisplayRole)
         dataset.set_name(new_name)
-        
+
         # Make new entries reflect new data dimensions/size
         self.model.setData(
             self.model.index(topleft.row(), 1, self.model.parent(topleft)), dataset.n_points()
@@ -107,7 +108,6 @@ class DatasetsWidget(QWidget):
         if dataset is None:
             return
         self.dataset_view_renderer.show_dataset(dataset, fit_to_view=False)
-        
 
     def hierarchical_zoom(self, zoomin=True):
         N_max = self.get('N_max')
@@ -135,8 +135,8 @@ class DatasetsWidget(QWidget):
 
     def reproject_current_view(self):
         current_view = self.dataset_view_renderer.current_view()
-        representatives = current_view.get('representatives')
-        regulars = current_view.get('regular')
+        representatives = current_view.representatives()
+        regulars = current_view.regulars()
         representatidves_nd = RootSelection(representatives)
         regulars_nd = RootSelection(regulars)
         representatives_reprojected = MDSEmbedding(representatidves_nd)
@@ -158,13 +158,12 @@ class DatasetsWidget(QWidget):
         if dataset.n_dimensions(count_hidden=False) > 2:
             representatives_nd = RandomSampling(dataset, n_samples)
             representatives_2d = MDSEmbedding(representatives_nd, n_components=2)
-            
+
             dataset_diff = Difference(dataset, representatives_nd)
             dataset_emb = LAMPEmbedding(dataset_diff, representatives_2d)
             dataset_emb.ready.connect(
                 lambda: self.dataset_view_renderer.show_dataset(dataset_emb, representatives_2d, fit_to_view=True)
             )
-        
 
     @pyqtSlot(object)
     def add_dataset(self, dataset):
@@ -247,7 +246,6 @@ class DatasetsWidget(QWidget):
         dataset.data_ready.connect(self.handle_reader_results)
 
         self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
-
 
     def get(self, name):
         return self.sliders[name].value()
