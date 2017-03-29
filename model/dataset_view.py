@@ -12,9 +12,6 @@ from model import *
 class DatasetView:
 
     def __init__(self, previous=None):
-        self._representatives = set()
-        self._regulars = set()
-        self._vao = dict()
         self._vbo = dict()
 
         self.shader_program = None
@@ -32,30 +29,41 @@ class DatasetView:
     def is_active(self):
         return self._is_active
 
-    def add_regular(self, dataset):
+    def set_regular(self, dataset):
         assert(dataset.is_ready())
-        self._regulars.add(dataset)
+        self._old_regular = dataset
 
-    def add_representative(self, dataset):
+    def set_new_regular(self, dataset):
         assert(dataset.is_ready())
-        self._representatives.add(dataset)
+        self._new_regular = dataset
 
-    def representatives(self):
-        assert(len(self._representatives) == 1)
-        return list(self._representatives)[0]
+    def set_representative(self, dataset):
+        assert(dataset.is_ready())
+        self._old_representative = dataset
 
-    def regulars(self):
-        assert(len(self._regulars) == 1)
-        return list(self._regulars)[0]
+    def set_new_representative(self, dataset):
+        assert(dataset.is_ready())
+        self._new_representative = dataset
 
-    def datasets(self):
-        return set.union(self._regulars, self._representatives)
+    def representative(self):
+        return self._new_representative
 
-    def union(self):
+    def regular(self):
+        return self._new_regular
+
+    def datasets(self, new=True, old=False):
+        if new and not old:
+            return [self._new_regular, self._new_representative]
+        elif new and old:
+            return [self._old_regular, self._new_regular, self._old_representative, self._new_representative]
+        elif old:
+            return [self._old_regular, self._old_representative]
+
+    def union(self, new=True, old=False):
         try:
             return self._union
         except AttributeError:
-            datasets = list(self.datasets())
+            datasets = self.datasets(new=new, old=old)
             union = datasets[0]
             for dataset in datasets[1:]:
                 union = Union(union, dataset, async=False)
@@ -85,19 +93,19 @@ class DatasetView:
             y_max = max(y_max, dataset.data()[:, 1].max())
         return x_min, x_max, y_min, y_max
 
-    def make_vbo(self, data, normalize=False, dtype=np.float32):
-        X_32 = np.atleast_2d(np.array(data, dtype=dtype))
+    def make_vbo(self, data, normalize=False):
+        data = np.atleast_2d(data.copy())
 
         if normalize:
-            for dim in range(X_32.shape[1]):
-                X_32[:, dim] -= X_32[:, dim].min()
-                X_32[:, dim] /= X_32[:, dim].max()
+            for dim in range(data.shape[1]):
+                data[:, dim] -= data[:, dim].min()
+                data[:, dim] /= data[:, dim].max()
 
         vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
         vbo.create()
         vbo.bind()
         vbo.setUsagePattern(QOpenGLBuffer.StaticDraw)
-        vbo.allocate(X_32.data, X_32.data.nbytes)
+        vbo.allocate(data.data, data.data.nbytes)
         vbo.release()
 
         return vbo
@@ -110,152 +118,245 @@ class DatasetView:
     def enable(self, shader_program, gl):
         self.shader_program = shader_program
 
-        for dataset in self.datasets():
-            self._vao[dataset] = self.make_vao()
+        try:
+            root_idcs = np.sort(np.unique(np.concatenate([
+                self._old_regular.indices_in_root(),
+                self._new_regular.indices_in_root(),
+                self._old_representative.indices_in_root(),
+                self._new_representative.indices_in_root()
+            ])))
+            N = root_idcs.size
+            
+            old_repr_indices = self._old_representative.indices_from_root(root_idcs)
+            new_repr_indices = self._new_representative.indices_from_root(root_idcs)
+            old_regular_indices = self._old_regular.indices_from_root(root_idcs)
+            new_regular_indices = self._new_regular.indices_from_root(root_idcs)
+            
+            v_has_old = np.array(np.logical_or(old_repr_indices != -1, old_regular_indices != -1), dtype=np.ubyte)
+            v_has_new = np.array(np.logical_or(new_repr_indices != -1, new_regular_indices != -1), dtype=np.ubyte)
+            
+            v_position_old = np.zeros((N, 2), dtype=np.float32)
+            v_position_old[old_repr_indices != -1, :] = self._old_representative.data()[np.delete(old_repr_indices, np.where(old_repr_indices == -1)), :2]
+            v_position_old[old_regular_indices != -1, :] = self._old_regular.data()[np.delete(old_regular_indices, np.where(old_regular_indices == -1)), :2]
+            
+            v_position_new = np.zeros((N, 2), dtype=np.float32)
+            v_position_new[new_repr_indices != -1, :] = self._new_representative.data()[np.delete(new_repr_indices, np.where(new_repr_indices == -1)), :2]
+            v_position_new[new_regular_indices != -1, :] = self._new_regular.data()[np.delete(new_regular_indices, np.where(new_regular_indices == -1)), :2]
+            
+            v_color = np.zeros(N, dtype=np.float32)
+            v_color[old_repr_indices != -1] = self._old_representative.data()[np.delete(old_repr_indices, np.where(old_repr_indices == -1)), -1]
+            v_color[new_repr_indices != -1] = self._new_representative.data()[np.delete(new_repr_indices, np.where(new_repr_indices == -1)), -1]
+            v_color[old_regular_indices != -1] = self._old_regular.data()[np.delete(old_regular_indices, np.where(old_regular_indices == -1)), -1]
+            v_color[new_regular_indices != -1] = self._new_regular.data()[np.delete(new_regular_indices, np.where(new_regular_indices == -1)), -1]
 
-            self._vbo[(dataset, 'v_position')] = self.make_vbo(dataset.data()[:, :2])
-            self._vbo[(dataset, 'v_position_new')] = self.make_vbo(np.zeros((dataset.n_points(), 2)))
-            self._vbo[(dataset, 'v_color')] = self.make_vbo(dataset.data()[:, -1])
-            self._vbo[(dataset, 'v_has_old')] = self.make_vbo(np.ones(dataset.n_points()), dtype=np.uint32)
-            self._vbo[(dataset, 'v_has_new')] = self.make_vbo(np.zeros(dataset.n_points()), dtype=np.uint32)
+            v_is_repr = np.array(old_repr_indices != -1, dtype=np.ubyte)
+            v_is_repr_new = np.array(new_repr_indices != -1, dtype=np.ubyte)
 
-            self._vao[dataset].bind()
+            D_old = cdist(self._old_regular.data_in_root()[np.delete(old_regular_indices, np.where(old_regular_indices == -1)), :], self._old_representative.data_in_root()[np.delete(old_repr_indices, np.where(old_repr_indices == -1)), :])
+            dist_from_repr_old = D_old.min(axis=1)
+            dist_from_repr_old -= dist_from_repr_old.min()
+            dist_from_repr_old /= dist_from_repr_old.max()
 
-            position_loc = shader_program.attributeLocation('v_position')
-            shader_program.enableAttributeArray(position_loc)
-            self._vbo[(dataset, 'v_position')].bind()
-            shader_program.setAttributeBuffer(
-                position_loc,    # Attribute location
-                gl.GL_FLOAT,     # Data type of elements
-                0,               # Offset
-                2,               # Number of components per vertex
-                0                # Stride
-            )
-            self._vbo[(dataset, 'v_position')].release()
+            v_dist_from_repr_old = np.zeros(N, dtype=np.float32)
+            v_dist_from_repr_old[old_regular_indices != -1] = np.array(dist_from_repr_old, dtype=np.float32)
 
-            position_new_loc = shader_program.attributeLocation('v_position_new')
-            shader_program.enableAttributeArray(position_new_loc)
-            self._vbo[(dataset, 'v_position_new')].bind()
-            shader_program.setAttributeBuffer(
-                position_new_loc,    # Attribute location
-                gl.GL_FLOAT,     # Data type of elements
-                0,               # Offset
-                2,               # Number of components per vertex
-                0                # Stride
-            )
-            self._vbo[(dataset, 'v_position_new')].release()
+            D_new = cdist(self._new_regular.data_in_root()[np.delete(new_regular_indices, np.where(new_regular_indices == -1)), :], self._new_representative.data_in_root()[np.delete(new_repr_indices, np.where(new_repr_indices == -1)), :])
+            dist_from_repr_new = D_new.min(axis=1)
+            dist_from_repr_new -= dist_from_repr_new.min()
+            dist_from_repr_new /= dist_from_repr_new.max()
 
-            has_old_loc = shader_program.attributeLocation('v_has_old')
-            shader_program.enableAttributeArray(has_old_loc)
-            self._vbo[(dataset, 'v_has_old')].bind()
-            shader_program.setAttributeBuffer(
-                has_old_loc,    # Attribute location
-                gl.GL_UNSIGNED_BYTE,     # Data type of elements
-                0,               # Offset
-                1,               # Number of components per vertex
-                0                # Stride
-            )
-            self._vbo[(dataset, 'v_has_old')].release()
+            v_dist_from_repr_new = np.zeros(N, dtype=np.float32)
+            v_dist_from_repr_new[new_regular_indices != -1] = np.array(dist_from_repr_new, dtype=np.float32)
 
-            has_new_loc = shader_program.attributeLocation('v_has_new')
-            shader_program.enableAttributeArray(has_new_loc)
-            self._vbo[(dataset, 'v_has_new')].bind()
-            shader_program.setAttributeBuffer(
-                has_new_loc,    # Attribute location
-                gl.GL_UNSIGNED_BYTE,     # Data type of elements
-                0,               # Offset
-                1,               # Number of components per vertex
-                0                # Stride
-            )
-            self._vbo[(dataset, 'v_has_new')].release()
+        except AttributeError:
+            N = self._new_regular.n_points() + self._new_representative.n_points()
+            v_position_old = np.zeros((N, 2), dtype=np.float32)
+            v_position_new = np.array(np.concatenate([
+                self._new_regular.data()[:, :2],
+                self._new_representative.data()[:, :2]
+            ], axis=0), dtype=np.float32)
+            v_color = np.array(np.concatenate([
+                self._new_regular.data()[:, -1],
+                self._new_representative.data()[:, -1]
+            ]), dtype=np.float32)
+            v_has_old = np.zeros(N, dtype=np.ubyte)
+            v_has_new = np.ones(N, dtype=np.ubyte)
+            v_is_repr = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
+            v_is_repr_new = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
 
-            color_loc = shader_program.attributeLocation('v_color')
-            shader_program.enableAttributeArray(color_loc)
-            self._vbo[(dataset, 'v_color')].bind()
-            shader_program.setAttributeBuffer(
-                color_loc,    # Attribute location
-                gl.GL_FLOAT,  # Data type of elements
-                0,            # Offset
-                1,            # Number of components per vertex
-                0             # Stride
-            )
-            self._vbo[(dataset, 'v_color')].release()
+            v_dist_from_repr_old = np.zeros(N, dtype=np.float32)
 
-            self._vao[dataset].release()
+            D_new = cdist(self._new_regular.data_in_root(), self._new_representative.data_in_root())
+            dist_from_repr_new = D_new.min(axis=1)
+            dist_from_repr_new -= dist_from_repr_new.min()
+            dist_from_repr_new /= dist_from_repr_new.max()
 
-        representatives = self.representatives()
-        for dataset in self._regulars:
-            D = cdist(dataset.data_in_root(), representatives.data_in_root())
-            dist_from_repr = D.min(axis=1)
-            dist_from_repr -= dist_from_repr.min()
-            dist_from_repr /= dist_from_repr.max()
+            v_dist_from_repr_new = np.array(np.concatenate([
+                dist_from_repr_new,
+                np.zeros(self._new_representative.n_points())
+            ]), dtype=np.float32)
 
-            self._vbo[(dataset, 'v_dist_from_repr')] = self.make_vbo(dist_from_repr)
+        self._n_points = N
 
-            self._vao[dataset].bind()
-            d_from_repr_loc = shader_program.attributeLocation('v_dist_from_repr')
-            shader_program.enableAttributeArray(d_from_repr_loc)
-            self._vbo[(dataset, 'v_dist_from_repr')].bind()
-            # Explain the format of the attribute buffer to the shader.
-            shader_program.setAttributeBuffer(
-                d_from_repr_loc,   # Attribute location
-                gl.GL_FLOAT,       # Data type of elements
-                0,                 # Offset
-                1,                 # Number of components per vertex
-                0                  # Stride
-            )
-            self._vbo[(dataset, 'v_dist_from_repr')].release()
-            self._vao[dataset].release()
+        self._vao = self.make_vao()
+
+        self._vbo['v_position_old'] = self.make_vbo(v_position_old)
+        self._vbo['v_position_new'] = self.make_vbo(v_position_new)
+        self._vbo['v_color'] = self.make_vbo(v_color)
+        self._vbo['v_has_old'] = self.make_vbo(v_has_old)
+        self._vbo['v_has_new'] = self.make_vbo(v_has_new)
+        self._vbo['v_is_repr'] = self.make_vbo(v_is_repr)
+        self._vbo['v_is_repr_new'] = self.make_vbo(v_is_repr_new)
+        self._vbo['v_dist_from_repr_old'] = self.make_vbo(v_dist_from_repr_old)
+        self._vbo['v_dist_from_repr_new'] = self.make_vbo(v_dist_from_repr_new)
+
+        self._vao.bind()
+
+        position_loc = shader_program.attributeLocation('v_position_old')
+        shader_program.enableAttributeArray(position_loc)
+        self._vbo['v_position_old'].bind()
+        shader_program.setAttributeBuffer(
+            position_loc,    # Attribute location
+            gl.GL_FLOAT,     # Data type of elements
+            0,               # Offset
+            2,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_position_old'].release()
+
+        position_new_loc = shader_program.attributeLocation('v_position_new')
+        shader_program.enableAttributeArray(position_new_loc)
+        self._vbo['v_position_new'].bind()
+        shader_program.setAttributeBuffer(
+            position_new_loc,    # Attribute location
+            gl.GL_FLOAT,     # Data type of elements
+            0,               # Offset
+            2,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_position_new'].release()
+
+        color_loc = shader_program.attributeLocation('v_color')
+        shader_program.enableAttributeArray(color_loc)
+        self._vbo['v_color'].bind()
+        shader_program.setAttributeBuffer(
+            color_loc,    # Attribute location
+            gl.GL_FLOAT,  # Data type of elements
+            0,            # Offset
+            1,            # Number of components per vertex
+            0             # Stride
+        )
+        self._vbo['v_color'].release()
+
+        has_old_loc = shader_program.attributeLocation('v_has_old')
+        shader_program.enableAttributeArray(has_old_loc)
+        self._vbo['v_has_old'].bind()
+        shader_program.setAttributeBuffer(
+            has_old_loc,    # Attribute location
+            gl.GL_UNSIGNED_BYTE,     # Data type of elements
+            0,               # Offset
+            1,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_has_old'].release()
+
+        has_new_loc = shader_program.attributeLocation('v_has_new')
+        shader_program.enableAttributeArray(has_new_loc)
+        self._vbo['v_has_new'].bind()
+        shader_program.setAttributeBuffer(
+            has_new_loc,    # Attribute location
+            gl.GL_UNSIGNED_BYTE,     # Data type of elements
+            0,               # Offset
+            1,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_has_new'].release()
+
+        is_repr_loc = shader_program.attributeLocation('v_is_repr')
+        shader_program.enableAttributeArray(is_repr_loc)
+        self._vbo['v_is_repr'].bind()
+        shader_program.setAttributeBuffer(
+            is_repr_loc,    # Attribute location
+            gl.GL_UNSIGNED_BYTE,     # Data type of elements
+            0,               # Offset
+            1,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_is_repr'].release()
+
+        is_repr_new_loc = shader_program.attributeLocation('v_is_repr_new')
+        shader_program.enableAttributeArray(is_repr_new_loc)
+        self._vbo['v_is_repr_new'].bind()
+        shader_program.setAttributeBuffer(
+            is_repr_new_loc,    # Attribute location
+            gl.GL_UNSIGNED_BYTE,     # Data type of elements
+            0,               # Offset
+            1,               # Number of components per vertex
+            0                # Stride
+        )
+        self._vbo['v_is_repr_new'].release()
+
+        dist_from_repr_old_loc = shader_program.attributeLocation('v_dist_from_repr_old')
+        shader_program.enableAttributeArray(dist_from_repr_old_loc)
+        self._vbo['v_dist_from_repr_old'].bind()
+        # Explain the format of the attribute buffer to the shader.
+        shader_program.setAttributeBuffer(
+            dist_from_repr_old_loc,   # Attribute location
+            gl.GL_FLOAT,       # Data type of elements
+            0,                 # Offset
+            1,                 # Number of components per vertex
+            0                  # Stride
+        )
+        self._vbo['v_dist_from_repr_old'].release()
+
+        dist_from_repr_new_loc = shader_program.attributeLocation('v_dist_from_repr_new')
+        shader_program.enableAttributeArray(dist_from_repr_new_loc)
+        self._vbo['v_dist_from_repr_new'].bind()
+        # Explain the format of the attribute buffer to the shader.
+        shader_program.setAttributeBuffer(
+            dist_from_repr_new_loc,   # Attribute location
+            gl.GL_FLOAT,       # Data type of elements
+            0,                 # Offset
+            1,                 # Number of components per vertex
+            0                  # Stride
+        )
+        self._vbo['v_dist_from_repr_new'].release()
+        
+        self._vao.release()
 
         self._is_active = True
 
     def disable(self):
-        for dataset in self._representatives:
-            self._vao[dataset].bind()
-            self.shader_program.disableAttributeArray('v_position')
-            self.shader_program.disableAttributeArray('v_position_new')
-            self.shader_program.disableAttributeArray('v_has_new')
-            self.shader_program.disableAttributeArray('v_has_old')
-            self.shader_program.disableAttributeArray('v_color')
-            self._vao[dataset].release()
-            self._vbo[(dataset, 'v_position')].destroy()
-            self._vbo[(dataset, 'v_position_new')].destroy()
-            self._vbo[(dataset, 'v_has_new')].destroy()
-            self._vbo[(dataset, 'v_has_old')].destroy()
-            self._vbo[(dataset, 'v_color')].destroy()
-            self._vao[dataset].destroy()
+        self._vao.bind()
+        self.shader_program.disableAttributeArray('v_position_old')
+        self.shader_program.disableAttributeArray('v_position_new')
+        self.shader_program.disableAttributeArray('v_color')
+        self.shader_program.disableAttributeArray('v_has_old')
+        self.shader_program.disableAttributeArray('v_has_new')
+        self.shader_program.disableAttributeArray('v_is_repr')
+        self.shader_program.disableAttributeArray('v_is_repr_new')
+        self.shader_program.disableAttributeArray('v_dist_from_repr_old')
+        self.shader_program.disableAttributeArray('v_dist_from_repr_new')
+        self._vao.release()
 
-        for dataset in self._regulars:
-            self._vao[dataset].bind()
-            self.shader_program.disableAttributeArray('v_position')
-            self.shader_program.disableAttributeArray('v_position_new')
-            self.shader_program.disableAttributeArray('v_has_new')
-            self.shader_program.disableAttributeArray('v_has_old')
-            self.shader_program.disableAttributeArray('v_color')
-            self.shader_program.disableAttributeArray('v_dist_from_repr')
-            self._vao[dataset].release()
-            self._vbo[(dataset, 'v_position')].destroy()
-            self._vbo[(dataset, 'v_position_new')].destroy()
-            self._vbo[(dataset, 'v_has_new')].destroy()
-            self._vbo[(dataset, 'v_has_old')].destroy()
-            self._vbo[(dataset, 'v_color')].destroy()
-            self._vbo[(dataset, 'v_dist_from_repr')].destroy()
-            self._vao[dataset].destroy()
+        self._vbo['v_position_old'].destroy()
+        self._vbo['v_position_new'].destroy()
+        self._vbo['v_color'].destroy()
+        self._vbo['v_has_old'].destroy()
+        self._vbo['v_has_new'].destroy()
+        self._vbo['v_is_repr'].destroy()
+        self._vbo['v_is_repr_new'].destroy()
+        self._vbo['v_dist_from_repr_old'].destroy()
+        self._vbo['v_dist_from_repr_new'].destroy()
+
+        self._vao.destroy()
 
         self._is_active = False
 
     def draw(self, gl):
-        self.shader_program.setUniformValue('u_is_representative', 0)
-        for dataset in self._regulars:
-            self._vao[dataset].bind()
-            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
-            self._vao[dataset].release()
-
-        self.shader_program.setUniformValue('u_is_representative', 1)
-        for dataset in self._representatives:
-            self._vao[dataset].bind()
-            gl.glDrawArrays(gl.GL_POINTS, 0, dataset.n_points())
-            self._vao[dataset].release()
+        self._vao.bind()
+        gl.glDrawArrays(gl.GL_POINTS, 0, self._n_points)
+        self._vao.release()
 
     def __iter__(self):
         return iter(self.datasets())

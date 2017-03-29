@@ -128,21 +128,21 @@ class DatasetsWidget(QWidget):
 
                 new_neighbours_2d = LAMPEmbedding(knn_fetching, representatives_2d)
                 new_neighbours_2d.ready.connect(
-                    lambda: self.dataset_view_renderer.show_dataset(new_neighbours_2d, representatives_2d)
+                    lambda: self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
                 )
         else:
             raise NotImplementedError
 
     def reproject_current_view(self):
         current_view = self.dataset_view_renderer.current_view()
-        representatives = current_view.representatives()
-        regulars = current_view.regulars()
+        representatives = current_view.representative()
+        regulars = current_view.regular()
         representatidves_nd = RootSelection(representatives)
         regulars_nd = RootSelection(regulars)
         representatives_reprojected = MDSEmbedding(representatidves_nd)
         regulars_reprojected = LAMPEmbedding(regulars_nd, representatives_reprojected)
         regulars_reprojected.ready.connect(
-            lambda: self.dataset_view_renderer.show_dataset(regulars_reprojected, representatives_reprojected, fit_to_view=True)
+            lambda: self.dataset_view_renderer.interpolate_to_dataset(regulars_reprojected, representatives_reprojected)
         )
 
     @pyqtSlot(object)

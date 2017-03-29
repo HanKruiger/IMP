@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 import os
 import abc
 import numpy as np
+from collections import defaultdict
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -109,6 +110,10 @@ class Dataset(QObject):
         else:
             return self._data
 
+    def root_indexed_data(self, root_indices):
+        indices = self.indices_from_root(root_indices)
+        return self.data()[indices, :]
+
     @pyqtSlot(object)
     def set_data(self, data):
         self._data = data
@@ -122,6 +127,20 @@ class Dataset(QObject):
             return np.arange(self.n_points())
         else:
             return self.parent().indices_in_root()[self.indices_in_parent()]
+
+    def indices_from_root(self, root_idcs):
+        try:
+            return np.array([self._root_idcs_lookup[i] for i in root_idcs])
+        except AttributeError:
+            # assert(np.all(self.indices_in_root() == np.sort(self.indices_in_root())))
+            self._root_idcs_lookup = defaultdict(lambda: -1)
+            for i, idx in enumerate(self.indices_in_root()):
+                self._root_idcs_lookup[idx] = i
+
+            
+            # Find corresponding indices in this dataset.
+            # idcs = np.searchsorted(self.indices_in_root(), root_indices)
+            return self.indices_from_root(root_idcs)
 
     def data_in_root(self, split_hidden=False):
         return self.root().data(split_hidden=split_hidden)[self.indices_in_root(), :]

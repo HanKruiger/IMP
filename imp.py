@@ -12,7 +12,6 @@ if __name__ == '__main__':
     qsf.setRenderableType(QSurfaceFormat.OpenGL)
     qsf.setProfile(QSurfaceFormat.CoreProfile)
     qsf.setVersion(4, 1)
-    # qsf.setSamples(4)
     QSurfaceFormat.setDefaultFormat(qsf)
 
     app = QApplication(sys.argv)

@@ -18,7 +18,7 @@ class VisualsWidget(QGroupBox):
         self.sliders['point_size'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
         vbox_main.addLayout(self.sliders['point_size'])
 
-        self.sliders['opacity_regular'] = Slider('Opacity (regular points)', 0, 1, 0.6, data_type=float)
+        self.sliders['opacity_regular'] = Slider('Opacity (regular points)', 0, 1, 0.4, data_type=float)
         self.sliders['opacity_regular'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
         vbox_main.addLayout(self.sliders['opacity_regular'])
 

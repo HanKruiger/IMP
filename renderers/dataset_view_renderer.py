@@ -4,6 +4,7 @@ from PyQt5.QtCore import *
 
 from model import *
 
+
 class DatasetViewRenderer(QObject):
 
     animation_done = pyqtSignal()
@@ -24,10 +25,11 @@ class DatasetViewRenderer(QObject):
         # (inverse viewport transform)
         self.pixel = QMatrix4x4()
 
-        self.fadein_interpolation = 0.0
-        self.fadein_animation_timer = Timer(n_steps=120)
-        self.fadein_animation_timer.tick.connect(self.fadein_animation)
+        self.interpolation_time = 200
 
+        self.fadein_interpolation = 0.0
+        self.fadein_animation_timer = Timer(n_steps=60)
+        self.fadein_animation_timer.tick.connect(self.fadein_animation)
 
     def vis_params(self):
         return self.gl_widget.imp_window.vis_params()
@@ -37,8 +39,8 @@ class DatasetViewRenderer(QObject):
         self.init_shaders()
 
     def init_shaders(self):
-        vertex_shader='shaders/points/vertex.glsl'
-        fragment_shader='shaders/points/fragment.glsl'
+        vertex_shader = 'shaders/points/vertex.glsl'
+        fragment_shader = 'shaders/points/fragment.glsl'
 
         self.shader_program = QOpenGLShaderProgram(self.gl_widget)
 
@@ -52,44 +54,57 @@ class DatasetViewRenderer(QObject):
     def current_view(self):
         return self._current_view
 
-    def get_latest(self):
-        try:
-            return self.dataset_views[-1]
-        except IndexError:
-            return None
-
     def previous(self):
         try:
-            self.show_dataset_view(self._current_view.previous())
+            if self.current_view().previous() is not None:
+                def callback():
+                    self.show_dataset_view(self.current_view().previous(), forward=False)
+                    self.fadein_animation_timer.stopped.disconnect(callback)
+                self.fadein_animation_timer.stopped.connect(callback)
+                self.fadein_animation_timer.start(self.interpolation_time, forward=False)
         except AttributeError:
             pass
 
     def next(self):
         try:
-            self.show_dataset_view(self._current_view.next())
+            self.show_dataset_view(self.current_view().next(), forward=True)
+            self.fadein_animation_timer.start(self.interpolation_time, forward=True)
         except AttributeError:
             pass
 
     def remove_dataset(self, dataset):
-        if dataset in self._current_view.datasets():
-            self.disable_dataset_view(self._current_view)
+        if dataset in self.current_view().datasets():
+            self.disable_dataset_view(self.current_view())
 
     def show_dataset(self, dataset, representatives=None, fit_to_view=False):
-        dataset_view = DatasetView(previous=self.get_latest())
-        dataset_view.add_regular(dataset)
+        dataset_view = DatasetView(previous=self.current_view())
+        dataset_view.set_new_regular(dataset)
         if representatives is not None:
-            dataset_view.add_representative(representatives)
+            dataset_view.set_new_representative(representatives)
 
-        self.show_dataset_view(dataset_view, fit_to_view=fit_to_view)
+        self.show_dataset_view(dataset_view, fit_to_view=fit_to_view, forward=False)
 
-    def show_dataset_view(self, dataset_view, fit_to_view=False):
+
+    def interpolate_to_dataset(self, dataset, representatives, forward=True):
+        dataset_view = DatasetView(previous=self.current_view())
+
+        dataset_view.set_regular(self.current_view()._new_regular)
+        dataset_view.set_new_regular(dataset)
+        dataset_view.set_representative(self.current_view()._new_representative)
+        dataset_view.set_new_representative(representatives)
+
+        self.show_dataset_view(dataset_view, forward=forward)
+        self.fadein_interpolation = 0.0
+        self.fadein_animation_timer.start(self.interpolation_time, forward=forward)
+
+    def show_dataset_view(self, dataset_view, fit_to_view=False, forward=True):
         self.dataset_views.append(dataset_view)
         self.set_current_view(dataset_view, fit_to_view=fit_to_view)
-        self.fadein_interpolation = 0.0
-        self.fadein_animation_timer.start(2000)
+        if forward:
+            self.fadein_interpolation = 0.0
+        else:
+            self.fadein_interpolation = 1.0
 
-    def set_dataset_view(self, fit_to_view=False):
-        dataset_view = self.dataset_views[-1]
 
     def set_current_view(self, dataset_view, fit_to_view=False):
         if self._current_view is not None:
@@ -225,12 +240,17 @@ class DatasetViewRenderer(QObject):
         return visible_idcs, invisible_idcs
 
     def current_union(self):
-        return self.dataset_views[-1].union()
+        if self.fadein_interpolation < 0.5:
+            return self.current_view().union(new=False, old=True)
+        else:
+            return self.current_view().union(new=True, old=False)
+
 
 class Timer(QTimer):
 
     # Emits value between 0 and 1, indicating how far the timer is w.r.t. the total time
     tick = pyqtSignal(float)
+    stopped = pyqtSignal()
 
     def __init__(self, n_steps):
         super().__init__()
@@ -238,16 +258,24 @@ class Timer(QTimer):
         self._steps = 0
         self.timeout.connect(self.step)
 
-    # Starts a timer, that will give _n_steps ticks in total_time milliseconds.
-    def start(self, total_time):
+    # Starts a timer, that will give self._n_steps ticks in total_time milliseconds.
+    def start(self, total_time, forward=True):
+        self._forward = forward
         self._steps = 0
         if self.isActive():
+            print('Warning: Tried to start active timer.')
             return
         else:
             super().start(total_time / self._n_steps)
 
     def step(self):
         self._steps += 1
-        self.tick.emit(self._steps / self._n_steps)
+
+        if self._forward:
+            self.tick.emit(self._steps / self._n_steps)
+        else:
+            self.tick.emit(1.0 - self._steps / self._n_steps)
+
         if self._steps == self._n_steps:
             self.stop()
+            self.stopped.emit()

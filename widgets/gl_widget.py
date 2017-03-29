@@ -25,7 +25,6 @@ class GLWidget(QOpenGLWidget):
             self.update()
 
     def mousePressEvent(self, e):
-        print(self.hasFocus())
         self.mouse_when_clicked = QVector2D(e.pos())
 
     def wheelEvent(self, wheel_event):
@@ -34,18 +33,23 @@ class GLWidget(QOpenGLWidget):
             return
         wheel_event.accept()
 
+        # Heuristic to see if it's a touchpad scroll or mousewheel scroll
+        from_scrollwheel = abs(wheel_event.angleDelta().y()) >= 120
+
         factor = 1.01 ** wheel_event.pixelDelta().y()
         if QGuiApplication.keyboardModifiers() == Qt.ControlModifier:
-            if not self.accept_hierarchical_zoom:
+            if not from_scrollwheel and not self.accept_hierarchical_zoom:
                 return
-            self.accept_hierarchical_zoom = False
+            if not from_scrollwheel:
+                self.accept_hierarchical_zoom = False
             
             if factor > 1:
                 self.imp_window.datasets_widget.hierarchical_zoom()
         elif QGuiApplication.keyboardModifiers() == Qt.ShiftModifier:
-            if not self.accept_history_navigation:
+            if not from_scrollwheel and not self.accept_history_navigation:
                 return
-            self.accept_history_navigation = False
+            if not from_scrollwheel:
+                self.accept_history_navigation = False
 
             if factor > 1:
                 self.dataset_view_renderer.next()

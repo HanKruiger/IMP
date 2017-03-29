@@ -5,17 +5,23 @@ float colormap_green(float x);
 float colormap_blue(float x);
 vec3 colormap(float x);
 
-uniform bool u_is_representative;
 uniform float u_fadein_interpolation;
+uniform float u_opacity_regular;
+uniform float u_opacity_representatives;
 
 in float f_color;
-in float f_opacity;
-in float f_dist_from_repr;
+flat in float f_dist_from_repr;
+flat in uint f_is_repr;
+flat in uint f_is_repr_new;
+flat in uint f_has_old;
+flat in uint f_has_new;
+
 out vec4 o_color;
 
 void main() {
+
 	float dist_from_border;
-	if (!u_is_representative) {
+	if (f_is_repr_new == 0) {
 		vec2 circCoord = 2.0 * gl_PointCoord - 1.0;
 		float radius = dot(circCoord, circCoord);
 
@@ -31,12 +37,23 @@ void main() {
 
 	/* Smooth transition on the border of the disk */
 	float delta_dist_from_border = fwidth(dist_from_border);
-	float alpha = f_opacity * smoothstep(0.0, delta_dist_from_border, dist_from_border);
+	float alpha = smoothstep(0.0, delta_dist_from_border, dist_from_border);
+
+	float old_opacity = u_opacity_regular;
+	float new_opacity = u_opacity_regular;
+	if (f_is_repr != 0)
+		old_opacity = u_opacity_representatives;
+	if (f_is_repr_new != 0)
+		new_opacity = u_opacity_representatives;
+
+	alpha *= mix(old_opacity, new_opacity, u_fadein_interpolation);
 
 	/* Fade in new points */
-	if (!u_is_representative)
-		alpha *= clamp(u_fadein_interpolation / f_dist_from_repr, 0.0, 1.0);
-	
+	if (f_has_new != 0 && f_has_old == 0)
+		alpha *= clamp(u_fadein_interpolation, 0.0, 1.0);
+	else if (f_has_new == 0 && f_has_old != 0)
+		alpha *= clamp(1.0 - u_fadein_interpolation, 0.0, 1.0);
+
 	o_color = vec4(colormap(f_color), alpha);
 }
 
