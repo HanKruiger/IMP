@@ -49,10 +49,11 @@ void main() {
 	alpha *= mix(old_opacity, new_opacity, u_fadein_interpolation);
 
 	/* Fade in new points */
-	if (f_has_new != 0 && f_has_old == 0)
+	if (f_has_new != 0 && f_has_old == 0) {
 		alpha *= clamp(u_fadein_interpolation, 0.0, 1.0);
-	else if (f_has_new == 0 && f_has_old != 0)
+	} else if (f_has_new == 0 && f_has_old != 0) {
 		alpha *= clamp(1.0 - u_fadein_interpolation, 0.0, 1.0);
+	}
 
 	o_color = vec4(colormap(f_color), alpha);
 }
