@@ -22,13 +22,12 @@ class Dataset(QObject):
         if hidden is None:
             hidden = parent.hidden_features()
 
-        self._name = name
+        self._name = 'lol'
         self._parent = parent
         self._n_hidden_features = hidden
 
         self._workers = set()
         self._children = []
-        self._q_item = None
 
         self._data = data
 
@@ -80,14 +79,7 @@ class Dataset(QObject):
     def parent(self):
         return self._parent
 
-    def q_item(self):
-        return self._q_item
-
-    def set_q_item(self, q_item):
-        self._q_item = q_item
-
     def data_changed(self):
-        self.q_item().emitDataChanged()
         self.data_ready.emit(self)
         self.ready.emit()
 
@@ -136,10 +128,6 @@ class Dataset(QObject):
             self._root_idcs_lookup = defaultdict(lambda: -1)
             for i, idx in enumerate(self.indices_in_root()):
                 self._root_idcs_lookup[idx] = i
-
-            
-            # Find corresponding indices in this dataset.
-            # idcs = np.searchsorted(self.indices_in_root(), root_indices)
             return self.indices_from_root(root_idcs)
 
     def data_in_root(self, split_hidden=False):
@@ -213,28 +201,6 @@ class Dataset(QObject):
         def work(self):
             """Method that should do the work. E.g., make an embedding."""
 
-class DatasetItem(QStandardItem):
-
-    def __init__(self, text):
-        super().__init__(text)
-
-    def type(self):
-        return QStandardItem.UserType
-
-    def setData(self, data, role):
-        if role == Qt.UserRole:
-            self._data = data
-            data.set_q_item(self)
-            self.emitDataChanged()
-        else:
-            super().setData(data, role)
-
-    def data(self, role):
-        if role == Qt.UserRole:
-            return self._data
-        else:
-            return super().data(role)
-
 
 class Selection(Dataset):
 
@@ -285,7 +251,6 @@ class Selection(Dataset):
         self._is_ready = True
         self.data_changed()
 
-
 class Merging(Dataset):
 
     def __init__(self, parent_1, parent_2, add_as_hidden=True, name=None, hidden=None):
@@ -304,15 +269,6 @@ class Merging(Dataset):
 
 class Union(Dataset):
 
-    class Unioner(Dataset.Worker):
-
-        ready = pyqtSignal()
-
-        def __init__(self):
-            super().__init__()
-
-        def work(self):
-            self.ready.emit()
 
     def __init__(self, parent_1, parent_2, name=None, hidden=None, async=True):
         if name is None:
@@ -329,9 +285,19 @@ class Union(Dataset):
         else:
             assert(parent_1.is_ready() and parent_2.is_ready())
             self.dependencies_met()
+    
+    class Unioner(Dataset.Worker):
+
+        ready = pyqtSignal()
+
+        def __init__(self):
+            super().__init__()
+
+        def work(self):
+            self.ready.emit()
 
     def indices_in_root(self):
-        return np.concatenate((self._parent_1.indices_in_root(), self._parent_2.indices_in_root()), axis=0)
+        return np.concatenate((self._parent_1.indices_in_root(), self._parent_2.indices_in_root()))
 
     def indices_in_parent(self):
         return (np.arange(self._parent_1.n_points()), np.arange(self._parent_2.n_points()))
@@ -344,9 +310,15 @@ class Union(Dataset):
     def data(self, split_hidden=False):
         if self._is_ready:
             if split_hidden:
-                non_hidden = np.row_stack((self._parent_1.data()[:, :-self.hidden_features()], self._parent_2.data()[:, :-self.hidden_features()]))
-                hidden = np.row_stack((self._parent_1.data()[:, -self.hidden_features():], self._parent_2.data()[:, -self.hidden_features():]))
-                return (hidden, non_hidden)
+                non_hidden = np.row_stack([
+                    self._parent_1.data()[:, :-self.hidden_features()],
+                    self._parent_2.data()[:, :-self.hidden_features()]
+                ])
+                hidden = np.row_stack([
+                    self._parent_1.data()[:, -self.hidden_features():],
+                    self._parent_2.data()[:, -self.hidden_features():]
+                ])
+                return (non_hidden, hidden)
             else:
                 return np.row_stack((self._parent_1.data(), self._parent_2.data()))
         else:

@@ -5,12 +5,11 @@ float colormap_green(float x);
 float colormap_blue(float x);
 vec3 colormap(float x);
 
-uniform float u_fadein_interpolation;
+uniform float u_time;
 uniform float u_opacity_regular;
 uniform float u_opacity_representatives;
 
 in float f_color;
-flat in float f_dist_from_repr;
 flat in uint f_is_repr;
 flat in uint f_is_repr_new;
 flat in uint f_has_old;
@@ -46,13 +45,13 @@ void main() {
 	if (f_is_repr_new != 0)
 		new_opacity = u_opacity_representatives;
 
-	alpha *= mix(old_opacity, new_opacity, u_fadein_interpolation);
+	alpha *= mix(old_opacity, new_opacity, u_time);
 
 	/* Fade in new points */
 	if (f_has_new != 0 && f_has_old == 0) {
-		alpha *= clamp(u_fadein_interpolation, 0.0, 1.0);
+		alpha *= clamp(u_time, 0.0, 1.0);
 	} else if (f_has_new == 0 && f_has_old != 0) {
-		alpha *= clamp(1.0 - u_fadein_interpolation, 0.0, 1.0);
+		alpha *= clamp(1.0 - u_time, 0.0, 1.0);
 	}
 
 	o_color = vec4(colormap(f_color), alpha);

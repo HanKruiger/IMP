@@ -44,7 +44,10 @@ class GLWidget(QOpenGLWidget):
                 self.accept_hierarchical_zoom = False
             
             if factor > 1:
-                self.imp_window.datasets_widget.hierarchical_zoom()
+                # Get world coordinates of mouse
+                world_pos = self.dataset_view_renderer.pixel_to_world(wheel_event.pos())
+                world_pos = np.array([world_pos.x(), world_pos.y()])
+                self.imp_window.datasets_widget.hierarchical_zoom(world_pos)
         elif QGuiApplication.keyboardModifiers() == Qt.ShiftModifier:
             if not from_scrollwheel and not self.accept_history_navigation:
                 return

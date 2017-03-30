@@ -1,5 +1,6 @@
 from model import *
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.linalg import svds
 from numpy.linalg import svd
 
@@ -21,10 +22,10 @@ class RandomSampling(Sampling):
 
         super().__init__(parent, n_samples, name=name, hidden=hidden)
 
-        sampler = RandomSampling.RandomSamplingWorker(parent, n_samples)
+        sampler = RandomSampling.RandomSampler(parent, n_samples)
         self.spawn_thread(sampler, self.set_indices_in_parent, waitfor=(parent,))
 
-    class RandomSamplingWorker(Dataset.Worker):
+    class RandomSampler(Dataset.Worker):
 
         def __init__(self, parent, n_samples):
             super().__init__()
@@ -33,6 +34,34 @@ class RandomSampling(Sampling):
 
         def work(self):
             idcs_in_parent = np.random.choice(self.parent.n_points(), self.n_samples, replace=False)
+            idcs_in_parent.sort()
+            self.ready.emit(idcs_in_parent)
+
+
+class KNNSampling(Sampling):
+
+    def __init__(self, parent, n_samples, pos, name=None, hidden=None):
+        if name is None:
+            name = 'KNN({}, {})'.format(parent.name(), pos)
+
+        super().__init__(parent, n_samples, name=name, hidden=hidden)
+
+        sampler = KNNSampling.KNNSampler(parent, n_samples, pos)
+        self.spawn_thread(sampler, self.set_indices_in_parent, waitfor=(parent,))
+
+    class KNNSampler(Dataset.Worker):
+
+        def __init__(self, parent, n_samples, pos):
+            super().__init__()
+            self.parent = parent
+            self.n_samples = n_samples
+            self.pos = pos
+
+        def work(self):
+            X, _ = self.parent.data(split_hidden=True)
+            knn = NearestNeighbors(n_neighbors=self.n_samples)
+            knn.fit(X)
+            idcs_in_parent = knn.kneighbors(self.pos.reshape(1, -1), return_distance=False).flatten()
             idcs_in_parent.sort()
             self.ready.emit(idcs_in_parent)
 
@@ -57,7 +86,7 @@ class SVDBasedSampling(Sampling):
             self.k = k
 
         def work(self):
-            X = self.parent.data()
+            X, _ = self.parent.data(split_hidden=True)
             c = self.n_samples
 
             if self.k is None:

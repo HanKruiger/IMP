@@ -12,11 +12,9 @@ class DatasetViewRenderer(QObject):
     def __init__(self, gl_widget):
         super().__init__()
         self.gl_widget = gl_widget
-        self.dataset_views = []
-        self._current_view = None
 
         # Transforms points from world space to view space
-        self.view = QMatrix4x4()
+        # self.view_matrix() (this is per datasetview object!)
 
         # Transforms points from view space to clip space
         self.projection = QMatrix4x4()
@@ -27,9 +25,9 @@ class DatasetViewRenderer(QObject):
 
         self.interpolation_time = 200
 
-        self.fadein_interpolation = 0.0
-        self.fadein_animation_timer = Timer(n_steps=60)
-        self.fadein_animation_timer.tick.connect(self.fadein_animation)
+        self.animation_time = 0.0
+        self.animation_timer = Timer(n_steps=60)
+        self.animation_timer.tick.connect(self.set_animation_time)
 
     def vis_params(self):
         return self.gl_widget.imp_window.vis_params()
@@ -52,23 +50,27 @@ class DatasetViewRenderer(QObject):
         self.shader_program.link()
 
     def current_view(self):
-        return self._current_view
+        try:
+            return self._current_view
+        except AttributeError:
+            return None
 
     def previous(self):
         try:
-            if self.current_view().previous() is not None:
-                def callback():
-                    self.show_dataset_view(self.current_view().previous(), forward=False)
-                    self.fadein_animation_timer.stopped.disconnect(callback)
-                self.fadein_animation_timer.stopped.connect(callback)
-                self.fadein_animation_timer.start(self.interpolation_time, forward=False)
+            previous_view = self.current_view().previous()
+            def callback():
+                self.show_dataset_view(previous_view, forward=False)
+                self.animation_timer.stopped.disconnect(callback)
+            self.animation_timer.stopped.connect(callback)
+            self.animation_timer.start(self.interpolation_time, forward=False)
         except AttributeError:
             pass
 
     def next(self):
         try:
-            self.show_dataset_view(self.current_view().next(), forward=True)
-            self.fadein_animation_timer.start(self.interpolation_time, forward=True)
+            next_view = self.current_view().next()
+            self.show_dataset_view(next_view, forward=True)
+            self.animation_timer.start(self.interpolation_time, forward=True)
         except AttributeError:
             pass
 
@@ -88,83 +90,74 @@ class DatasetViewRenderer(QObject):
     def interpolate_to_dataset(self, dataset, representatives, forward=True):
         dataset_view = DatasetView(previous=self.current_view())
 
-        dataset_view.set_regular(self.current_view()._new_regular)
+        dataset_view.set_old_regular(self.current_view().new_regular())
         dataset_view.set_new_regular(dataset)
-        dataset_view.set_representative(self.current_view()._new_representative)
+        dataset_view.set_old_representative(self.current_view().new_representative())
         dataset_view.set_new_representative(representatives)
 
-        self.show_dataset_view(dataset_view, forward=forward)
-        self.fadein_interpolation = 0.0
-        self.fadein_animation_timer.start(self.interpolation_time, forward=forward)
+        self.show_dataset_view(dataset_view, forward=forward, fit_to_view=True)
+        self.animation_time = 0.0
+        self.animation_timer.start(self.interpolation_time, forward=forward)
 
     def show_dataset_view(self, dataset_view, fit_to_view=False, forward=True):
-        self.dataset_views.append(dataset_view)
-        self.set_current_view(dataset_view, fit_to_view=fit_to_view)
-        if forward:
-            self.fadein_interpolation = 0.0
-        else:
-            self.fadein_interpolation = 1.0
-
-
-    def set_current_view(self, dataset_view, fit_to_view=False):
-        if self._current_view is not None:
-            self.disable_dataset_view(self._current_view)
+        try:
+            self.disable_dataset_view(self.current_view())
+        except AttributeError:
+            pass
 
         self.gl_widget.makeCurrent()
         dataset_view.enable(self.shader_program, self.gl)
         self.gl_widget.doneCurrent()
 
         if fit_to_view:
-            x_min, x_max, y_min, y_max = dataset_view.get_bounds()
-
-            # Compute the center of the all-enclosing square, and the distance from center to its sides.
-            center = QVector2D((x_min + x_max) / 2, (y_min + y_max) / 2)
-            dist_to_sides = 0.5 * max(x_max - x_min, y_max - y_min)
-
-            # To account for points that are almost exactly at the border, we need a small
-            # tolerance value. (Can also be seen as (very small) padding.)
-            tolerance = .2
-            dist_to_sides *= 1 + tolerance
-
-            self.view.setToIdentity()
-            self.view.scale(1 / dist_to_sides)
-            self.view.translate(-center.x(), -center.y())
+            dataset_view.fit_to_view()
 
         self._current_view = dataset_view
+
+        if forward:
+            self.animation_time = 0.0
+        else:
+            self.animation_time = 1.0
+
         self.gl_widget.update()
 
     def disable_dataset_view(self, dataset_view):
         self.gl_widget.makeCurrent()
         dataset_view.disable()
         self.gl_widget.doneCurrent()
+
         self.gl_widget.update()
 
     def draw(self):
         self.shader_program.bind()
 
         self.shader_program.setUniformValue('u_projection', self.projection)
-        self.shader_program.setUniformValue('u_view', self.view)
         self.shader_program.setUniformValue('u_opacity_regular', self.vis_params().get('opacity_regular'))
         self.shader_program.setUniformValue('u_opacity_representatives', self.vis_params().get('opacity_representatives'))
         self.shader_program.setUniformValue('u_point_size', self.vis_params().get('point_size'))
-        self.shader_program.setUniformValue('u_fadein_interpolation', self.fadein_interpolation)
+        self.shader_program.setUniformValue('u_time', self.animation_time)
 
-        if self._current_view is not None:
-            self._current_view.draw(self.gl)
+        try:
+            self.current_view().draw(self.gl)
+        except AttributeError:
+            pass
 
         self.shader_program.release()
 
     @pyqtSlot()
     def zoom(self, factor, pos):
         p_world = self.pixel_to_world(pos, d=3)
-        self.view.translate((1 - factor) * p_world)
-        self.view.scale(factor)
+        self.view_matrix('new').translate((1 - factor) * p_world)
+        self.view_matrix('new').scale(factor)
 
     def translate(self, movement):
-        self.view.translate(self.pixel_to_world(movement, d=3, w=0))
+        self.view_matrix('new').translate(self.pixel_to_world(movement, d=3, w=0))
 
-    def fadein_animation(self, t):
-        self.fadein_interpolation = t
+    def view_matrix(self, old_or_new='new'):
+        return self.current_view().view_matrix(old_or_new)
+
+    def set_animation_time(self, time):
+        self.animation_time = time
         self.gl_widget.update()
 
     def pixel_to_world(self, p_in, d=2, w=1):
@@ -181,7 +174,7 @@ class DatasetViewRenderer(QObject):
             print('Pixel matrix is not invertible.')
             return
 
-        view_i, invertible = self.view.inverted()
+        view_i, invertible = self.view_matrix('new').inverted()
         if not invertible:
             print('View matrix is not invertible.')
             return
@@ -215,8 +208,11 @@ class DatasetViewRenderer(QObject):
         self.pixel.translate(1, 1)
         self.pixel.scale(1, -1)
 
-    def filter_unseen_points(self):
-        projection_view = self.projection * self.view
+    def filter_unseen_points(self, view=None):
+        if view is None:
+            view = self.view_matrix('new')
+
+        projection_view = self.projection * view
         projection_view = np.array(projection_view.data()).reshape((4, 4))
 
         # Delete z-entries in transformation matrix (it's 2D, not 3D).
@@ -239,11 +235,8 @@ class DatasetViewRenderer(QObject):
 
         return visible_idcs, invisible_idcs
 
-    def current_union(self):
-        if self.fadein_interpolation < 0.5:
-            return self.current_view().union(new=False, old=True)
-        else:
-            return self.current_view().union(new=True, old=False)
+    def current_union(self, old_or_new='new'):
+        return self.current_view().union(old_or_new)
 
 
 class Timer(QTimer):
