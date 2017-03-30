@@ -27,8 +27,8 @@ class DatasetsWidget(QWidget):
 
         self.sliders = dict()
         self.sliders['N_max'] = Slider('Maximum number of points', 50, 3000, 1000, data_type=int)
-        self.sliders['repr_max'] = Slider('Maximum number of representatives', 20, 100, 30, data_type=int)
-        self.sliders['zoom_fraction'] = Slider('Zoom fraction (%)', 1, 99, 50, data_type=int)
+        self.sliders['repr_fraction'] = Slider('Representatives fraction', 0.01, 0.99, 0.05, data_type=float)
+        self.sliders['zoom_fraction'] = Slider('Zoom fraction', 0.01, 0.99, 0.50, data_type=float)
 
         parameters_group = QGroupBox('Projection control')
         parameters_layout = QVBoxLayout()
@@ -37,7 +37,7 @@ class DatasetsWidget(QWidget):
         parameters_layout.addWidget(reproject_button)
         for _, slider in self.sliders.items():
             parameters_layout.addLayout(slider)
-            
+
         parameters_group.setLayout(parameters_layout)
 
         self.vbox_main = QVBoxLayout()
@@ -48,69 +48,90 @@ class DatasetsWidget(QWidget):
         self.setAcceptDrops(True)
 
     def hierarchical_zoom(self, mouse_pos, zoomin=True):
-        fraction = self.get('zoom_fraction') / 100
+        zoom_fraction = self.get('zoom_fraction')
+        repr_fraction = self.get('repr_fraction')
         N_max = self.get('N_max')
+        
         if zoomin:
-            # Get the 90% closest points to the mouse.
+            # Get the fraction of closest points to the mouse.
             union = self.dataset_view_renderer.current_union()
-            closest = KNNSampling(union, n_samples=round(union.n_points() * fraction), pos=mouse_pos)
-            # visibles, invisibles = self.dataset_view_renderer.filter_unseen_points()
+            closest = KNNSampling(union, n_samples=round(union.n_points() * zoom_fraction), pos=mouse_pos)
 
-            # if visibles is not None and invisibles is not None:
-            n_repr = self.get('repr_max')
-            # visible_points = Selection(union, idcs=visibles)
-            if closest.n_points() > n_repr:
-                representatives_2d = RandomSampling(closest, n_repr)
-            else:
-                assert(False)
-                representatives_2d = closest
+            # Use a fraction of the closest points as new representatives
+            n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
+            representatives_2d = RandomSampling(closest, n_repr)
 
-            n_fetch = N_max - representatives_2d.n_points()
-            knn_fetching = KNNFetching(representatives_2d, n_fetch)
+            # Fetch new points from the big dataset
+            n_fetch = N_max - closest.n_points()
+            knn_fetching = KNNFetching(closest, n_fetch)
 
-            new_neighbours_2d = LAMPEmbedding(knn_fetching, representatives_2d)
+            # Remove the representatives from the closest points, and get the nd data of those
+            closest_diff = Difference(closest, representatives_2d)
+            closest_diff_root = RootSelection(closest_diff)
+
+            # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
+            # using the picked representatives as fixed representatives.
+            new_neighbours_2d = LAMPEmbedding(Union(knn_fetching, closest_diff_root), representatives_2d)
+            
+            # Schedule that the projection is shown.
             new_neighbours_2d.ready.connect(
                 lambda: self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
             )
+            self.imp_window.statusBar().showMessage('Performing hierarchical zoom...')
         else:
             raise NotImplementedError
 
     def reproject_current_view(self):
         current_view = self.dataset_view_renderer.current_view()
-        representatives = current_view.new_representative()
-        regulars = current_view.new_regular()
-        representatidves_nd = RootSelection(representatives)
-        regulars_nd = RootSelection(regulars)
-        representatives_reprojected = MDSEmbedding(representatidves_nd)
-        regulars_reprojected = LAMPEmbedding(regulars_nd, representatives_reprojected)
-        regulars_reprojected.ready.connect(
-            lambda: self.dataset_view_renderer.interpolate_to_dataset(regulars_reprojected, representatives_reprojected)
+
+        # Get the representative and regular datasets from the current view
+        representative = current_view.new_representative()
+        regular = current_view.new_regular()
+        
+        # Get the nd data corresponding to the 2D points
+        representative_nd = RootSelection(representative)
+        regular_nd = RootSelection(regular)
+
+        # Reproject the nd datapoints
+        representative_reprojected = MDSEmbedding(representative_nd)
+        regular_reprojected = LAMPEmbedding(regular_nd, representative_reprojected)
+
+        # Schedule that the new projection is shown.
+        regular_reprojected.ready.connect(
+            lambda: self.dataset_view_renderer.interpolate_to_dataset(regular_reprojected, representative_reprojected)
         )
+        self.imp_window.statusBar().showMessage('Reprojecting current view...')
 
     @pyqtSlot(object)
     def handle_reader_results(self, dataset):
-        self.imp_window.statusBar().clearMessage()
-        N_max = self.get('N_max')
-        n_samples = self.get('repr_max')
-        if dataset.n_points() > N_max:
-            sampling = RandomSampling(dataset, N_max)
+        self.imp_window.statusBar().showMessage('Loading finished. Projecting {}...'.format(dataset.name()))
+        n_points = self.get('N_max')
+        repr_fraction = self.get('repr_fraction')
+
+        # Subsample the dataset, if necessary.
+        if dataset.n_points() > n_points:
+            sampling = RandomSampling(dataset, n_points)
             dataset = sampling
 
-        representatives_2d = None
+        n_repr = round(repr_fraction * dataset.n_points())
+
+        # Subsample the subsampled dataset, always.
+        representatives_nd = RandomSampling(dataset, n_repr)
+        dataset_diff_nd = Difference(dataset, representatives_nd)
+
         if dataset.n_dimensions(count_hidden=False) > 2:
-            representatives_nd = RandomSampling(dataset, n_samples)
+            # Project with MDS+LAMP
             representatives_2d = MDSEmbedding(representatives_nd, n_components=2)
+            dataset_diff_2d = LAMPEmbedding(dataset_diff_nd, representatives_2d)
+        elif dataset.n_dimensions(count_hidden=False) == 2:
+            # Don't project, since dimensionality is 2.
+            representatives_2d = representatives_nd
+            dataset_diff_2d = dataset_diff_nd
 
-            dataset_diff = Difference(dataset, representatives_nd)
-            dataset_emb = LAMPEmbedding(dataset_diff, representatives_2d)
-            dataset_emb.ready.connect(
-                lambda: self.dataset_view_renderer.show_dataset(dataset_emb, representatives_2d, fit_to_view=True)
-            )
-
-    def remove_dataset(self, dataset):
-        self.dataset_view_renderer.remove_dataset(dataset)
-
-        dataset.destroy()
+        # Schedule that the projection is shown.
+        dataset_diff_2d.ready.connect(
+            lambda: self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
+        )
 
     def dragEnterEvent(self, drag_enter_event):
         if drag_enter_event.mimeData().hasUrls():
@@ -132,12 +153,11 @@ class DatasetsWidget(QWidget):
         paths = [url.path() for url in urls]
 
         dataset = InputDataset(paths)
-        # self.add_dataset(dataset)
         dataset.data_ready.connect(self.handle_reader_results)
 
         drop_event.accept()
 
-        # Set focus to our window after the drop event.
+        # Set focus to our window after the drop event. (Otherwise focus stays at the source window.)
         self.activateWindow()
 
         self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))

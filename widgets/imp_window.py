@@ -38,7 +38,6 @@ class IMPWindow(QMainWindow):
 
         self.center()
         self.setWindowTitle('IMP: Interactive Multiscale Projections')
-        self.statusBar().showMessage('Built user interface.', msecs=2000)
 
     def center(self):
         rect = self.frameGeometry()

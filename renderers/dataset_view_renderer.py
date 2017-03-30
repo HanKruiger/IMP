@@ -79,6 +79,8 @@ class DatasetViewRenderer(QObject):
             self.disable_dataset_view(self.current_view())
 
     def show_dataset(self, dataset, representatives=None, fit_to_view=False):
+        self.gl_widget.imp_window.statusBar().clearMessage()
+
         dataset_view = DatasetView(previous=self.current_view())
         dataset_view.set_new_regular(dataset)
         if representatives is not None:
@@ -88,6 +90,8 @@ class DatasetViewRenderer(QObject):
 
 
     def interpolate_to_dataset(self, dataset, representatives, forward=True):
+        self.gl_widget.imp_window.statusBar().clearMessage()
+        
         dataset_view = DatasetView(previous=self.current_view())
 
         dataset_view.set_old_regular(self.current_view().new_regular())

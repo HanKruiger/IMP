@@ -27,7 +27,7 @@ class Embedding(Dataset):
 
 class TSNEEmbedding(Embedding):
 
-    class TSNEWorker(Dataset.Worker):
+    class TSNEEmbedder(Dataset.Worker):
 
         def __init__(self, parent, **parameters):
             super().__init__()
@@ -53,7 +53,7 @@ class TSNEEmbedding(Embedding):
 
         super().__init__(parent, parameters['n_components'], name=name, hidden=hidden)
 
-        worker = TSNEEmbedding.TSNEWorker(parent, **parameters)
+        worker = TSNEEmbedding.TSNEEmbedder(parent, **parameters)
 
         self.spawn_thread(worker, self.set_data, waitfor=(parent,))
 
@@ -66,11 +66,11 @@ class PCAEmbedding(Embedding):
 
         super().__init__(parent, parameters['n_components'], name=name, hidden=hidden)
 
-        worker = PCAEmbedding.PCAWorker(parent, **parameters)
+        worker = PCAEmbedding.PCAEmbedder(parent, **parameters)
 
         self.spawn_thread(worker, self.set_data, waitfor=(parent,))
 
-    class PCAWorker(Dataset.Worker):
+    class PCAEmbedder(Dataset.Worker):
 
         def __init__(self, parent, **parameters):
             super().__init__()
@@ -93,7 +93,7 @@ class PCAEmbedding(Embedding):
 
 class MDSEmbedding(Embedding):
 
-    class MDSWorker(Dataset.Worker):
+    class MDSEmbedder(Dataset.Worker):
 
         def __init__(self, parent, **parameters):
             super().__init__()
@@ -119,14 +119,14 @@ class MDSEmbedding(Embedding):
 
         super().__init__(parent, parameters['n_components'], name=name, hidden=hidden)
 
-        worker = MDSEmbedding.MDSWorker(parent, **parameters)
+        worker = MDSEmbedding.MDSEmbedder(parent, **parameters)
 
         self.spawn_thread(worker, self.set_data, waitfor=(parent,))
 
 
 class LAMPEmbedding(Embedding):
 
-    class LAMPWorker(Dataset.Worker):
+    class LAMPEmbedder(Dataset.Worker):
 
         def __init__(self, parent, representatives_nd, representatives_2d, **parameters):
             super().__init__()
@@ -140,7 +140,6 @@ class LAMPEmbedding(Embedding):
             X_s, _ = self.representatives_nd.data(split_hidden=True)
             Y_s, _ = self.representatives_2d.data(split_hidden=True)
             X_use, X_hidden = self.parent.data(split_hidden=True)
-            print('Doing LAMP with {} representatives and {} regulars.'.format(X_s.shape[0], X_use.shape[0]))
 
             N = X_use.shape[0]
             n = Y_s.shape[1]
@@ -150,7 +149,7 @@ class LAMPEmbedding(Embedding):
             for i in np.arange(N):
                 x = X_use[i, :]
 
-                alphas = ((X_s - x)**-2).sum(axis=1)
+                alphas = 1 / ((X_s - x)**2).sum(axis=1)
 
                 x_tilde = alphas.dot(X_s) / alphas.sum()
                 y_tilde = alphas.dot(Y_s) / alphas.sum()
@@ -178,5 +177,5 @@ class LAMPEmbedding(Embedding):
 
         representatives_nd = RootSelection(representatives_2d)
 
-        worker = LAMPEmbedding.LAMPWorker(parent, representatives_nd, representatives_2d, **parameters)
+        worker = LAMPEmbedding.LAMPEmbedder(parent, representatives_nd, representatives_2d, **parameters)
         self.spawn_thread(worker, self.set_data, waitfor=(parent, representatives_2d, representatives_nd))
