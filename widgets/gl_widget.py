@@ -11,21 +11,24 @@ class GLWidget(QOpenGLWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.dataset_view_renderer = DatasetViewRenderer(self)
-        self.accept_hierarchical_zoom = False
-        self.accept_history_navigation = False
 
     def previous_view(self):
         self.dataset_view_renderer.previous()
 
     def mouseMoveEvent(self, e):
-        mouse = QVector2D(e.pos())
+        self.mouse_pos = QVector2D(e.pos())
         if e.buttons() == Qt.LeftButton:
-            self.dataset_view_renderer.translate(mouse - self.mouse_when_clicked)
-            self.mouse_when_clicked = mouse
+            self.dataset_view_renderer.translate(self.mouse_pos - self.mouse_when_clicked)
+            self.mouse_when_clicked = self.mouse_pos
             self.update()
 
     def mousePressEvent(self, e):
         self.mouse_when_clicked = QVector2D(e.pos())
+
+    def hierarchical_zoom(self):
+        world_pos = self.dataset_view_renderer.pixel_to_world(self.mouse_pos)
+        world_pos = np.array([world_pos.x(), world_pos.y()])
+        self.imp_window.datasets_widget.hierarchical_zoom(world_pos)
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
@@ -33,42 +36,20 @@ class GLWidget(QOpenGLWidget):
             return
         wheel_event.accept()
 
-        # Heuristic to see if it's a touchpad scroll or mousewheel scroll
-        from_scrollwheel = abs(wheel_event.angleDelta().y()) >= 120
-
         factor = 1.01 ** wheel_event.pixelDelta().y()
-        if QGuiApplication.keyboardModifiers() == Qt.ControlModifier:
-            if not from_scrollwheel and not self.accept_hierarchical_zoom:
-                return
-            if not from_scrollwheel:
-                self.accept_hierarchical_zoom = False
-            
-            if factor > 1:
-                # Get world coordinates of mouse
-                world_pos = self.dataset_view_renderer.pixel_to_world(wheel_event.pos())
-                world_pos = np.array([world_pos.x(), world_pos.y()])
-                self.imp_window.datasets_widget.hierarchical_zoom(world_pos)
-        elif QGuiApplication.keyboardModifiers() == Qt.ShiftModifier:
-            if not from_scrollwheel and not self.accept_history_navigation:
-                return
-            if not from_scrollwheel:
-                self.accept_history_navigation = False
-
-            if factor > 1:
-                self.dataset_view_renderer.next()
-            else:
-                self.dataset_view_renderer.previous()
-        else:
-            self.dataset_view_renderer.zoom(factor, wheel_event.pos())
-            self.update()
+        
+        self.dataset_view_renderer.zoom(factor, wheel_event.pos())
+        
+        self.update()
 
     def keyPressEvent(self, key_event):
-        if key_event.key() == Qt.Key_Control:
-            self.accept_hierarchical_zoom = True
-        if key_event.key() == Qt.Key_Shift:
-            self.accept_history_navigation = True
-
-        key_event.accept()
+        if key_event.key() == Qt.Key_Z:
+            key_event.accept()
+            self.hierarchical_zoom()
+        elif key_event.key() == Qt.Key_Comma:
+            self.dataset_view_renderer.previous()
+        elif key_event.key() == Qt.Key_Period:
+            self.dataset_view_renderer.next()
 
     def minimumSizeHint(self):
         return QSize(50, 50)
