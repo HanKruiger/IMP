@@ -10,7 +10,7 @@ uniform float u_opacity_regular;
 uniform float u_opacity_representatives;
 
 in float f_color;
-flat in uint f_is_repr;
+flat in uint f_is_repr_old;
 flat in uint f_is_repr_new;
 flat in uint f_has_old;
 flat in uint f_has_new;
@@ -40,7 +40,7 @@ void main() {
 
 	float old_opacity = u_opacity_regular;
 	float new_opacity = u_opacity_regular;
-	if (f_is_repr != 0)
+	if (f_is_repr_old != 0)
 		old_opacity = u_opacity_representatives;
 	if (f_is_repr_new != 0)
 		new_opacity = u_opacity_representatives;

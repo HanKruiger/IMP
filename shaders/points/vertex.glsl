@@ -12,7 +12,7 @@ in vec2 v_position_old;
 in vec2 v_position_new;
 in uint v_has_old;
 in uint v_has_new;
-in uint v_is_repr;
+in uint v_is_repr_old;
 in uint v_is_repr_new;
 in float v_color;
 
@@ -44,7 +44,7 @@ void main() {
 	
 	f_color = v_color;
 
-	f_is_repr = v_is_repr;
+	f_is_repr = v_is_repr_old;
 	f_is_repr_new = v_is_repr_new;
 	f_has_old = v_has_old;
 	f_has_new = v_has_new;

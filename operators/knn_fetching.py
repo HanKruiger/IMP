@@ -1,10 +1,13 @@
 import numpy as np
+import time
 from sklearn.neighbors import NearestNeighbors
 
 from model import Dataset
 
 # Return a dataset that contains the k closest points in X closest to query_idcs (but not also in query_idcs!).
-def knn_fetching(source, query, n_samples, sort=True):
+def knn_fetching(source, query, n_samples, sort=True, verbose=True):
+    t_0 = time.time()
+
     X = source.data()
     query_idcs = query.indices()
 
@@ -45,5 +48,8 @@ def knn_fetching(source, query, n_samples, sort=True):
         idcs_in_root.sort()
     data = X[idcs_in_root, :]
     dataset = Dataset(data, idcs_in_root, name='KNN fetching')
+
+    if verbose:
+        print('knn_fetching took {:.2f} seconds.'.format(time.time() - t_0))
 
     return dataset
