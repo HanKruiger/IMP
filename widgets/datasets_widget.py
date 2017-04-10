@@ -58,6 +58,8 @@ class DatasetsWidget(QWidget):
             the_union = self.dataset_view_renderer.current_union()
             closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
 
+            print('Selected the {} closest points'.format(closest.n_points()))
+
             # Use a fraction of the closest points as new representatives
             n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
             representatives_2d = random_sampling(closest, n_repr)
@@ -105,12 +107,11 @@ class DatasetsWidget(QWidget):
 
         # Subsample the dataset, if necessary.
         if dataset.n_points() > n_points:
-            sampling = random_sampling(dataset, n_points)
-            dataset = sampling
+            dataset = random_sampling(dataset, n_points)
 
         n_repr = round(repr_fraction * dataset.n_points())
 
-        # Subsample the subsampled dataset, always.
+        # Subsample the dataset for representatives.
         representatives_nd = random_sampling(dataset, n_repr)
         dataset_diff_nd = difference(dataset, representatives_nd)
 

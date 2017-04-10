@@ -10,7 +10,7 @@ class Slider(QVBoxLayout):
             if data_type == int:
                 n_steps = maxi - mini
             else:
-                n_steps = 100
+                n_steps = 1000
 
         self.data_type = data_type
 
