@@ -23,7 +23,7 @@ def knn_fetching(source, query, n_samples, sort=True):
 
     for i in source_idcs:
         # Compute the smallest distance from the candidate to any query sample.
-        dist = np.min(np.linalg.norm(Y - X[i, :]))
+        dist = np.min(np.linalg.norm(Y - X[i, :], axis=1))
 
         if len(closest) < n_samples:
             # Still room for more candidates, add in any case.
