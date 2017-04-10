@@ -13,8 +13,6 @@ from sklearn.manifold import TSNE
 
 class Dataset(QObject):
 
-    # Emitted when (child) embedding is finished
-    has_new_child = pyqtSignal(object)
     data_ready = pyqtSignal(object)
     ready = pyqtSignal()
 
@@ -95,7 +93,6 @@ class Dataset(QObject):
 
     def add_child(self, child):
         self._children.append(child)
-        self.has_new_child.emit(child)
 
     def remove_child(self, child):
         self._children.remove(child)
