@@ -4,6 +4,7 @@ from PyQt5.QtCore import *
 
 from model import *
 from widgets import Slider
+from operators import *
 
 import numpy as np
 
@@ -54,30 +55,28 @@ class DatasetsWidget(QWidget):
         
         if zoomin:
             # Get the fraction of closest points to the mouse.
-            union = self.dataset_view_renderer.current_union()
-            closest = KNNSampling(union, n_samples=round(union.n_points() * zoom_fraction), pos=mouse_pos)
+            the_union = self.dataset_view_renderer.current_union()
+            closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
 
             # Use a fraction of the closest points as new representatives
             n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
-            representatives_2d = RandomSampling(closest, n_repr)
+            representatives_2d = random_sampling(closest, n_repr)
+            representatives_nd = root_selection(representatives_2d)
 
             # Fetch new points from the big dataset
             n_fetch = N_max - closest.n_points()
-            knn_fetching = KNNFetching(closest, n_fetch)
+            nd_closest = knn_fetching(Dataset.root, closest, n_fetch)
 
             # Remove the representatives from the closest points, and get the nd data of those
-            closest_diff = Difference(closest, representatives_2d)
-            closest_diff_root = RootSelection(closest_diff)
+            closest_diff = difference(closest, representatives_2d)
+            closest_diff_root = root_selection(closest_diff)
 
             # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
             # using the picked representatives as fixed representatives.
-            new_neighbours_2d = LAMPEmbedding(Union(knn_fetching, closest_diff_root), representatives_2d)
+            new_neighbours_2d = lamp_projection(union(nd_closest, closest_diff_root), representatives_nd, representatives_2d)
             
             # Schedule that the projection is shown.
-            new_neighbours_2d.ready.connect(
-                lambda: self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
-            )
-            self.imp_window.statusBar().showMessage('Performing hierarchical zoom...')
+            self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
         else:
             raise NotImplementedError
 
@@ -89,18 +88,14 @@ class DatasetsWidget(QWidget):
         regular = current_view.new_regular()
         
         # Get the nd data corresponding to the 2D points
-        representative_nd = RootSelection(representative)
-        regular_nd = RootSelection(regular)
+        representative_nd = root_selection(representative)
+        regular_nd = root_selection(regular)
 
         # Reproject the nd datapoints
-        representative_reprojected = MDSEmbedding(representative_nd)
-        regular_reprojected = LAMPEmbedding(regular_nd, representative_reprojected)
+        representative_reprojected = mds_projection(representative_nd)
+        regular_reprojected = lamp_projection(regular_nd, representative_nd, representative_reprojected)
 
-        # Schedule that the new projection is shown.
-        regular_reprojected.ready.connect(
-            lambda: self.dataset_view_renderer.interpolate_to_dataset(regular_reprojected, representative_reprojected)
-        )
-        self.imp_window.statusBar().showMessage('Reprojecting current view...')
+        self.dataset_view_renderer.interpolate_to_dataset(regular_reprojected, representative_reprojected)
 
     @pyqtSlot(object)
     def handle_reader_results(self, dataset):
@@ -110,28 +105,25 @@ class DatasetsWidget(QWidget):
 
         # Subsample the dataset, if necessary.
         if dataset.n_points() > n_points:
-            sampling = RandomSampling(dataset, n_points)
+            sampling = random_sampling(dataset, n_points)
             dataset = sampling
 
         n_repr = round(repr_fraction * dataset.n_points())
 
         # Subsample the subsampled dataset, always.
-        representatives_nd = RandomSampling(dataset, n_repr)
-        dataset_diff_nd = Difference(dataset, representatives_nd)
+        representatives_nd = random_sampling(dataset, n_repr)
+        dataset_diff_nd = difference(dataset, representatives_nd)
 
-        if dataset.n_dimensions(count_hidden=False) > 2:
+        if dataset.n_dimensions() > 2:
             # Project with MDS+LAMP
-            representatives_2d = MDSEmbedding(representatives_nd, n_components=2)
-            dataset_diff_2d = LAMPEmbedding(dataset_diff_nd, representatives_2d)
-        elif dataset.n_dimensions(count_hidden=False) == 2:
+            representatives_2d = mds_projection(representatives_nd, n_components=2)
+            dataset_diff_2d = lamp_projection(dataset_diff_nd, representatives_nd, representatives_2d)
+        elif dataset.n_dimensions() == 2:
             # Don't project, since dimensionality is 2.
             representatives_2d = representatives_nd
             dataset_diff_2d = dataset_diff_nd
 
-        # Schedule that the projection is shown.
-        dataset_diff_2d.ready.connect(
-            lambda: self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
-        )
+        self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
 
     def dragEnterEvent(self, drag_enter_event):
         if drag_enter_event.mimeData().hasUrls():
@@ -151,12 +143,16 @@ class DatasetsWidget(QWidget):
     def dropEvent(self, drop_event):
         urls = drop_event.mimeData().urls()
         paths = [url.path() for url in urls]
+        if len(paths) > 1:
+            print('Not supported anymore. Drop labels in other bin manually.')
+            return
+        path = paths[0]
 
-        dataset = InputDataset(paths)
-        dataset.data_ready.connect(self.handle_reader_results)
+        self.reader = Reader(path)
+        self.reader.start(ready=self.handle_reader_results)
 
         drop_event.accept()
-
+        
         # Set focus to our window after the drop event. (Otherwise focus stays at the source window.)
         self.activateWindow()
 
