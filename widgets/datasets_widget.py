@@ -3,7 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 from model import *
-from widgets import Slider
+from widgets import Slider, FileDropWidget
 from operators import *
 
 import numpy as np
@@ -41,12 +41,17 @@ class DatasetsWidget(QWidget):
 
         parameters_group.setLayout(parameters_layout)
 
+        dataset_drop_box = FileDropWidget('Dataset input', 'Drop to load as dataset', self.read_dataset_from)
+        labels_drop_box = FileDropWidget('Labels input', 'Drop to load as labels', self.read_labels_from)
+        drops_hbox = QHBoxLayout()
+        drops_hbox.addWidget(dataset_drop_box)
+        drops_hbox.addWidget(labels_drop_box)
+
         self.vbox_main = QVBoxLayout()
         self.vbox_main.addWidget(controls_group)
         self.vbox_main.addWidget(parameters_group)
+        self.vbox_main.addLayout(drops_hbox)
         self.setLayout(self.vbox_main)
-
-        self.setAcceptDrops(True)
 
     def hierarchical_zoom(self, mouse_pos, zoomin=True):
         zoom_fraction = self.get('zoom_fraction')
@@ -126,38 +131,16 @@ class DatasetsWidget(QWidget):
 
         self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
 
-    def dragEnterEvent(self, drag_enter_event):
-        if drag_enter_event.mimeData().hasUrls():
-            urls = drag_enter_event.mimeData().urls()
-            if not all([url.isValid() for url in urls]):
-                qDebug('Invalid URL(s): {0}'.format([url.toString() for url in urls if not url.isValid()]))
-            elif not all([url.isLocalFile() for url in urls]):
-                qDebug('Non-local URL(s): {0}'.format([url.toString() for url in urls if not url.isLocalFile()]))
-            else:
-                self.imp_window.statusBar().showMessage('Drop to load {0} as new dataset'.format(', '.join([url.fileName() for url in urls])))
-                drag_enter_event.acceptProposedAction()
-
-    def dragLeaveEvent(self, drag_leave_event):
-        self.imp_window.statusBar().clearMessage()
-        drag_leave_event.accept()
-
-    def dropEvent(self, drop_event):
-        urls = drop_event.mimeData().urls()
-        paths = [url.path() for url in urls]
-        if len(paths) > 1:
-            print('Not supported anymore. Drop labels in other bin manually.')
-            return
-        path = paths[0]
-
+    def read_dataset_from(self, path):
         self.reader = Reader(path)
         self.reader.start(ready=self.handle_reader_results)
+        self.imp_window.statusBar().showMessage('Loading {0}...'.format(path))
 
-        drop_event.accept()
-        
-        # Set focus to our window after the drop event. (Otherwise focus stays at the source window.)
-        self.activateWindow()
-
-        self.imp_window.statusBar().showMessage('Loading {0}...'.format([url.fileName() for url in urls]))
+    def read_labels_from(self, path):
+        return
+        # self.reader = Reader(path)
+        # self.reader.start(ready=self.handle_reader_results)
+        # self.imp_window.statusBar().showMessage('Loading {0}...'.format(path))
 
     def get(self, name):
         return self.sliders[name].value()
