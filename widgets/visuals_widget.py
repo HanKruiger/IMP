@@ -25,6 +25,14 @@ class VisualsWidget(QGroupBox):
         self.sliders['opacity_representatives'] = Slider('Opacity (representatives)', 0, 1, 1, data_type=float)
         self.sliders['opacity_representatives'].slider.valueChanged.connect(self.imp_window.gl_widget.update)
         vbox_main.addLayout(self.sliders['opacity_representatives'])
+
+        self.colour_data = None
+        colour_hbox = QHBoxLayout()
+        colour_hbox.addWidget(QLabel('Colour'))
+        self.colour_combo_box = QComboBox()
+        self.colour_combo_box.currentIndexChanged.connect(self.colour_changed)
+        colour_hbox.addWidget(self.colour_combo_box)
+        vbox_main.addLayout(colour_hbox)
     
     def get(self, name):
         slider = self.sliders[name]
@@ -33,3 +41,14 @@ class VisualsWidget(QGroupBox):
     def set(self, name, value):
         slider = self.sliders[name]
         slider.set_value(value)
+
+    def add_colour_option(self, name, data):
+        self.colour_combo_box.addItem(name, userData=data)
+
+    @pyqtSlot(int)
+    def colour_changed(self, index):
+        self.colour_data = self.colour_combo_box.itemData(index, role=Qt.UserRole)
+        self.imp_window.gl_widget.dataset_view_renderer.add_colour(self.get_colour())
+
+    def get_colour(self):
+        return self.colour_data

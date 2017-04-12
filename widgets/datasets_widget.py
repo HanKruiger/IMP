@@ -104,9 +104,11 @@ class DatasetsWidget(QWidget):
 
         self.dataset_view_renderer.interpolate_to_dataset(regular_reprojected, representative_reprojected)
 
-    @pyqtSlot(object)
-    def handle_reader_results(self, dataset):
-        self.imp_window.statusBar().showMessage('Loading finished. Projecting {}...'.format(dataset.name()))
+    @pyqtSlot(object, object)
+    def handle_reader_results(self, X, labels):
+        # Make the input dataset object
+        dataset = Dataset(X, np.arange(X.shape[0]), name='input', is_root=True)
+        
         n_points = self.get('N_max')
         repr_fraction = self.get('repr_fraction')
 
@@ -131,16 +133,28 @@ class DatasetsWidget(QWidget):
 
         self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
 
+        # Set labels, if they were given in the same file.
+        if labels is not None:
+            success = Dataset.set_root_labels(labels)
+            if success:
+                self.imp_window.visuals_widget.add_colour_option('Label', Dataset.labels)
+
+    def handle_label_reader_results(self, labels, notgiven):
+        if notgiven is not None:
+            labels = np.column_stack([labels, notgiven])
+            print('Warning, added hidden dimensions to labels.')
+        
+        success = Dataset.set_root_labels(labels)
+        if success:
+            self.imp_window.visuals_widget.add_colour_option('Label', Dataset.labels)
+
     def read_dataset_from(self, path):
         self.reader = Reader(path)
         self.reader.start(ready=self.handle_reader_results)
-        self.imp_window.statusBar().showMessage('Loading {0}...'.format(path))
 
     def read_labels_from(self, path):
-        return
-        # self.reader = Reader(path)
-        # self.reader.start(ready=self.handle_reader_results)
-        # self.imp_window.statusBar().showMessage('Loading {0}...'.format(path))
+        self.label_reader = Reader(path)
+        self.label_reader.start(ready=self.handle_label_reader_results)
 
     def get(self, name):
         return self.sliders[name].value()

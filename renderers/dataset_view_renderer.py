@@ -86,8 +86,17 @@ class DatasetViewRenderer(QObject):
         if representatives is not None:
             dataset_view.set_new_representative(representatives)
 
+        colour = self.vis_params().get_colour()
+        if colour is not None:
+            dataset_view.set_colour(colour)
+
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view, forward=False)
 
+    def add_colour(self, colour):
+        self.gl_widget.makeCurrent()
+        self.current_view().add_colour(colour)
+        self.gl_widget.doneCurrent()
+        self.gl_widget.update()
 
     def interpolate_to_dataset(self, dataset, representatives, forward=True):
         self.gl_widget.imp_window.statusBar().clearMessage()
@@ -98,6 +107,10 @@ class DatasetViewRenderer(QObject):
         dataset_view.set_new_regular(dataset)
         dataset_view.set_old_representative(self.current_view().new_representative())
         dataset_view.set_new_representative(representatives)
+
+        colour = self.vis_params().get_colour()
+        if colour is not None:
+            dataset_view.set_colour(colour)
 
         self.show_dataset_view(dataset_view, forward=forward, fit_to_view=True)
         self.animation_time = 0.0

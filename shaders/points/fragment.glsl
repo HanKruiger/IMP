@@ -9,7 +9,7 @@ uniform float u_time;
 uniform float u_opacity_regular;
 uniform float u_opacity_representatives;
 
-in float f_color;
+in float f_colour;
 flat in uint f_is_repr_old;
 flat in uint f_is_repr_new;
 flat in uint f_has_old;
@@ -54,7 +54,7 @@ void main() {
 		alpha *= clamp(1.0 - u_time, 0.0, 1.0);
 	}
 
-	o_color = vec4(colormap(f_color), alpha);
+	o_color = vec4(colormap(f_colour), alpha);
 }
 
 float colormap_red(float x) {

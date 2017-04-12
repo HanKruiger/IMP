@@ -17,23 +17,19 @@ class Reader(Operator):
         self.path = path
 
     def work(self):
-        X, X_labels = self.read(self.path)
+        X, labels = self.read(self.path)
 
-        dataset = Dataset(X, np.arange(X.shape[0]), name='input', is_root=True)
+        # dataset = Dataset(X, np.arange(X.shape[0]), name='input', is_root=True)
 
-        labels = None
-        if X_labels is not None:
-            labels = Dataset(labels)
-
-        self.ready.emit(dataset, labels)
+        self.ready.emit(X, labels)
 
     def read(self, path):
         if path.endswith('.nd') or path.endswith('.2d'):
-            try:
-                X, X_labels = self.read_nd(path)
-                return X, X_labels
-            except:
-                pass  # Hope that numpy will read it..
+            # try:
+            X, labels = self.read_nd(path)
+            return X, labels
+            # except:
+                # pass  # Hope that numpy will read it..
         X = np.loadtxt(path)
 
         # Normalize single-dimensional datasets (these are often, if not always, labels)
@@ -81,7 +77,10 @@ class Reader(Operator):
             # Normalize the hidden features (labels) between 0 and 1.
             X[:, hidden_features] /= X[:, hidden_features].max(axis=0)
 
-            X_labels = X[:, hidden_features]
-            X = np.delete(X, hidden_features, axis=2)
+            labels = X[:, hidden_features]
+            X = np.delete(X, hidden_features, axis=1)
 
-            return X, X_labels
+            if labels.shape[1] == 1:
+                labels = labels.flatten()
+
+            return X, labels

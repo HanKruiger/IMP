@@ -53,6 +53,9 @@ class DatasetView:
     def set_new_representative(self, dataset):
         self._new_representative = dataset
 
+    def set_colour(self, colour):
+        self._colour = colour
+
     def new_representative(self):
         return self._new_representative
 
@@ -146,6 +149,20 @@ class DatasetView:
 
         return vbo
 
+    def update_vbo(self, vbo, data, normalize=False):
+        data = np.atleast_2d(data.copy())
+
+        if normalize:
+            for dim in range(data.shape[1]):
+                data[:, dim] -= data[:, dim].min()
+                data[:, dim] /= data[:, dim].max()
+
+        vbo.bind()
+        vbo.allocate(data.data, data.data.nbytes)
+        vbo.release()
+
+        return vbo
+
     def make_vao(self):
         vao = QOpenGLVertexArrayObject()
         vao.create()
@@ -183,7 +200,8 @@ class DatasetView:
             v_is_repr_new = np.array(new_repr_indices != -1, dtype=np.ubyte)
 
         except AttributeError:
-            N = self._new_regular.n_points() + self._new_representative.n_points()
+            root_idcs = np.concatenate([self._new_regular.indices(), self._new_representative.indices()])
+            N = root_idcs.size
             v_position_old = np.zeros((N, 2), dtype=np.float32)
             v_position_new = np.array(np.concatenate([
                 self._new_regular.data()[:, :2],
@@ -193,6 +211,13 @@ class DatasetView:
             v_has_new = np.ones(N, dtype=np.ubyte)
             v_is_repr_old = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
             v_is_repr_new = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
+        
+        try:
+            v_colour = np.array(self._colour[root_idcs], dtype=np.float32)
+        except AttributeError:
+            v_colour = np.zeros(N, dtype=np.float32)
+
+        self.root_idcs = root_idcs
 
         self._n_points = N
 
@@ -204,6 +229,7 @@ class DatasetView:
         self._vbo['v_has_new'] = self.make_vbo(v_has_new)
         self._vbo['v_is_repr_old'] = self.make_vbo(v_is_repr_old)
         self._vbo['v_is_repr_new'] = self.make_vbo(v_is_repr_new)
+        self._vbo['v_colour'] = self.make_vbo(v_colour)
 
         self.enable_vbo_attribute('v_position_old', dtype=gl.GL_FLOAT, tuple_size=2)
         self.enable_vbo_attribute('v_position_new', dtype=gl.GL_FLOAT, tuple_size=2)
@@ -211,8 +237,14 @@ class DatasetView:
         self.enable_vbo_attribute('v_has_new', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
         self.enable_vbo_attribute('v_is_repr_old', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
         self.enable_vbo_attribute('v_is_repr_new', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
+        self.enable_vbo_attribute('v_colour', dtype=gl.GL_FLOAT, tuple_size=1)
 
         self._is_active = True
+
+    def add_colour(self, colour):
+        self._colour = colour
+        v_colour = np.array(self._colour[self.root_idcs], dtype=np.float32)
+        self.update_vbo(self._vbo['v_colour'], v_colour)
 
     def enable_vbo_attribute(self, name, dtype, tuple_size):
         self._vao.bind()
@@ -237,6 +269,7 @@ class DatasetView:
         self.shader_program.disableAttributeArray('v_has_new')
         self.shader_program.disableAttributeArray('v_is_repr_old')
         self.shader_program.disableAttributeArray('v_is_repr_new')
+        self.shader_program.disableAttributeArray('v_colour')
         self._vao.release()
 
         self._vbo['v_position_old'].destroy()
@@ -245,6 +278,7 @@ class DatasetView:
         self._vbo['v_has_new'].destroy()
         self._vbo['v_is_repr_old'].destroy()
         self._vbo['v_is_repr_new'].destroy()
+        self._vbo['v_colour'].destroy()
 
         self._vao.destroy()
 

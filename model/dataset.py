@@ -24,6 +24,19 @@ class Dataset(QObject):
         if is_root:
             Dataset.root = self
 
+    @staticmethod
+    def set_root_labels(labels):
+        try:
+            if labels.shape[0] != Dataset.root.n_points():
+                print('Observations in labels don\'t match with root dataset. Labels not set.')
+                return False
+        except AttributeError:
+            print('Root dataset does not exist yet. Labels not set.')
+            return False
+        
+        Dataset.labels = labels
+        return True
+
     def name(self):
         return self._name
 

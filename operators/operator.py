@@ -6,6 +6,8 @@ import abc
 
 class Operator(QObject):
 
+    ready = pyqtSignal()
+
     def __init__(self):
         super().__init__()
 

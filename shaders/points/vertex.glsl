@@ -14,9 +14,9 @@ in uint v_has_old;
 in uint v_has_new;
 in uint v_is_repr_old;
 in uint v_is_repr_new;
-in float v_color;
+in float v_colour;
 
-out float f_color;
+out float f_colour;
 flat out uint f_has_old;
 flat out uint f_has_new;
 flat out uint f_is_repr;
@@ -42,7 +42,7 @@ void main() {
 	
 	gl_PointSize = u_point_size;
 	
-	f_color = v_color;
+	f_colour = v_colour;
 
 	f_is_repr = v_is_repr_old;
 	f_is_repr_new = v_is_repr_new;
