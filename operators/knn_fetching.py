@@ -5,22 +5,23 @@ from scipy.spatial.distance import cdist
 
 from model import Dataset
 
-# Return a dataset that contains the k closest points in X closest to query_idcs (but not also in query_idcs!).
-def knn_fetching(source, query, n_samples, sort=True, verbose=True):
+# Return a dataset that contains the n_samples closest points in the root dataset,
+# closest to the root observations corresponding to the samples in query.
+def knn_fetching(query, n_samples, sort=True, verbose=True):
     t_0 = time.time()
 
-    X = source.data()
+    X = Dataset.root.data()
     query_idcs = query.indices()
 
     # Query data
     Y = X[query_idcs, :]
 
-    # Retrieve the source data on indices where the query is NOT.
+    # Retrieve the root data on indices where the query is NOT.
     # (I.e., all candidates)
-    source_idcs = np.delete(np.arange(source.n_points()), query_idcs)
+    source_idcs = np.delete(np.arange(Dataset.root.n_points()), query_idcs)
     X_search = X[source_idcs, :]
 
-    # Compute smallest distances from all source points to any query point.
+    # Compute smallest distances from all root points to any query point.
     dists = cdist(Y, X_search, metric='euclidean').min(axis=0)
     # Retrieve indices (in X_search!) where the distances are smallest
     smallest_dist_idcs = np.argpartition(dists, n_samples)[:n_samples]
@@ -29,6 +30,7 @@ def knn_fetching(source, query, n_samples, sort=True, verbose=True):
 
     if sort:
         idcs_in_root.sort()
+
     data = X[idcs_in_root, :]
     dataset = Dataset(data, idcs_in_root, name='KNN fetching')
 

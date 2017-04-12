@@ -72,7 +72,7 @@ class DatasetsWidget(QWidget):
 
             # Fetch new points from the big dataset
             n_fetch = N_max - closest.n_points()
-            nd_closest = knn_fetching(Dataset.root, closest, n_fetch)
+            nd_closest = knn_fetching(closest, n_fetch)
 
             # Remove the representatives from the closest points, and get the nd data of those
             closest_diff = difference(closest, representatives_2d)
