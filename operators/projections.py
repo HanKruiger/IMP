@@ -4,21 +4,45 @@ from PyQt5.QtCore import *
 
 from model import *
 from sklearn.manifold import TSNE, MDS
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import numpy as np
 
 
-def mds_projection(source, **parameters):
+def print_bounds(label, Y, dims=[0, 1]):
+    print('{}:'.format(label))
+    for dim in dims:
+        print('\tdim {} min: {}'.format(dim, Y[:, dim].min()))
+        print('\tdim {} max: {}'.format(dim, Y[:, dim].max()))
+
+
+def mds_projection(source, verbose=False, **parameters):
     mds = MDS(**parameters)
 
     X = source.data()
     Y = mds.fit_transform(X)
 
+    if verbose:
+        print_bounds('MDS', Y)
+
     dataset = Dataset(Y, source.indices(), name='MDS projection')
     return dataset
 
 
-def lamp_projection(source, landmarks_nd, landmarks_2d):
+def tsne_projection(source, verbose=False, **parameters):
+    tsne = TSNE(**parameters)
+
+    X = source.data()
+    Y = tsne.fit_transform(X)
+
+    if verbose:
+        print_bounds('TSNE', Y)
+
+    dataset = Dataset(Y, source.indices(), name='t-SNE projection')
+    return dataset
+
+
+def lamp_projection(source, landmarks_nd, landmarks_2d, verbose=False):
     X_s = landmarks_nd.data()
     Y_s = landmarks_2d.data()
     X = source.data()
@@ -43,6 +67,9 @@ def lamp_projection(source, landmarks_nd, landmarks_2d):
         U, _, V = np.linalg.svd(A.T.dot(B), full_matrices=False)
 
         Y[i, :] = (x - x_tilde).dot(U.dot(V)) + y_tilde
+
+    if verbose:
+        print_bounds('LAMP', Y)
 
     dataset = Dataset(Y, source.indices(), name='LAMP projection')
 

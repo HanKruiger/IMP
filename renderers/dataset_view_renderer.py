@@ -86,15 +86,19 @@ class DatasetViewRenderer(QObject):
         if representatives is not None:
             dataset_view.set_new_representative(representatives)
 
-        colour = self.vis_params().get_colour()
-        if colour is not None:
-            dataset_view.set_colour(colour)
-
         self.show_dataset_view(dataset_view, fit_to_view=fit_to_view, forward=False)
 
     def add_colour(self, colour):
         self.gl_widget.makeCurrent()
-        self.current_view().add_colour(colour)
+        v_colour = np.array(colour[self.current_view().root_indices()], dtype=np.float32)
+        try:
+            colour_vbo = self.current_view().vbo('v_colour')
+            update_vbo(colour_vbo, v_colour)
+        except KeyError:
+            colour_vbo = make_vbo(v_colour)
+            self.current_view().set_vbo('v_colour', colour_vbo)
+            self.current_view().enable_vbo_attribute('v_colour', dtype=self.gl.GL_FLOAT, tuple_size=1)
+            
         self.gl_widget.doneCurrent()
         self.gl_widget.update()
 
@@ -108,10 +112,6 @@ class DatasetViewRenderer(QObject):
         dataset_view.set_old_representative(self.current_view().new_representative())
         dataset_view.set_new_representative(representatives)
 
-        colour = self.vis_params().get_colour()
-        if colour is not None:
-            dataset_view.set_colour(colour)
-
         self.show_dataset_view(dataset_view, forward=forward, fit_to_view=True)
         self.animation_time = 0.0
         self.animation_timer.start(self.interpolation_time, forward=forward)
@@ -123,7 +123,16 @@ class DatasetViewRenderer(QObject):
             pass
 
         self.gl_widget.makeCurrent()
+        # Enables all shader attributes regarding the positions
         dataset_view.enable(self.shader_program, self.gl)
+
+        # Make and enable color buffer here. (And not in every dataset_view independently...)
+        if self.vis_params().get_colour() is not None:
+            v_colour = np.array(self.vis_params().get_colour()[dataset_view.root_indices()], dtype=np.float32)
+            colour_vbo = make_vbo(v_colour)
+            dataset_view.set_vbo('v_colour', colour_vbo)
+            dataset_view.enable_vbo_attribute('v_colour', dtype=self.gl.GL_FLOAT, tuple_size=1)
+
         self.gl_widget.doneCurrent()
 
         if fit_to_view:
@@ -224,33 +233,6 @@ class DatasetViewRenderer(QObject):
         self.pixel.scale(0.5 * w, 0.5 * h)
         self.pixel.translate(1, 1)
         self.pixel.scale(1, -1)
-
-    def filter_unseen_points(self, view=None):
-        if view is None:
-            view = self.view_matrix('new')
-
-        projection_view = self.projection * view
-        projection_view = np.array(projection_view.data()).reshape((4, 4))
-
-        # Delete z-entries in transformation matrix (it's 2D, not 3D).
-        projection_view = np.delete(projection_view, 2, axis=0)
-        projection_view = np.delete(projection_view, 2, axis=1)
-
-        # Build union of all datasets in the current DatasetView
-        union = self.current_union()
-
-        N = union.n_points()
-        X = union.data()[:, :2]
-        X = np.concatenate((X, np.ones((N, 1))), axis=1)
-
-        # Project points to clip space
-        Y = X.dot(projection_view)
-
-        Y_visible = np.abs(Y).max(axis=1) <= 1
-        visible_idcs = np.where(Y_visible == True)[0]
-        invisible_idcs = np.where(Y_visible == False)[0]
-
-        return visible_idcs, invisible_idcs
 
     def current_union(self, old_or_new='new'):
         return self.current_view().union(old_or_new)

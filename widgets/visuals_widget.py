@@ -28,7 +28,7 @@ class VisualsWidget(QGroupBox):
 
         self.colour_data = None
         colour_hbox = QHBoxLayout()
-        colour_hbox.addWidget(QLabel('Colour'))
+        colour_hbox.addWidget(QLabel('Colour:'))
         self.colour_combo_box = QComboBox()
         self.colour_combo_box.currentIndexChanged.connect(self.colour_changed)
         colour_hbox.addWidget(self.colour_combo_box)

@@ -3,6 +3,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 from model import Dataset
 from operators import Operator
@@ -24,19 +25,23 @@ class Reader(Operator):
         self.ready.emit(X, labels)
 
     def read(self, path):
+        internal_labels = None
         if path.endswith('.nd') or path.endswith('.2d'):
-            # try:
-            X, labels = self.read_nd(path)
-            return X, labels
-            # except:
-                # pass  # Hope that numpy will read it..
-        X = np.loadtxt(path)
+            X, internal_labels = self.read_nd(path)
+        else:
+            X = np.loadtxt(path)
 
-        # Normalize single-dimensional datasets (these are often, if not always, labels)
+
         if X.ndim == 1:
+            # Normalize single-dimensional datasets (these are often, if not always, labels)
+            X -= X.min()
             X /= X.max()
+        else:
+            scaler = StandardScaler()
+            scaler.fit(X)
+            X = scaler.transform(X)
 
-        return X, None
+        return X, internal_labels
 
     def read_nd(self, path):
         with open(path) as f:

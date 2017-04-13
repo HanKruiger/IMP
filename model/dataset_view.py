@@ -8,6 +8,7 @@ from scipy.spatial.distance import cdist
 
 from model import *
 from operators import union
+from utils.buffers import *
 
 
 class DatasetView:
@@ -53,8 +54,8 @@ class DatasetView:
     def set_new_representative(self, dataset):
         self._new_representative = dataset
 
-    def set_colour(self, colour):
-        self._colour = colour
+    def root_indices(self):
+        return self._root_indices
 
     def new_representative(self):
         return self._new_representative
@@ -132,58 +133,22 @@ class DatasetView:
             y_max = max(y_max, dataset.data()[:, 1].max())
         return x_min, x_max, y_min, y_max
 
-    def make_vbo(self, data, normalize=False):
-        data = np.atleast_2d(data.copy())
-
-        if normalize:
-            for dim in range(data.shape[1]):
-                data[:, dim] -= data[:, dim].min()
-                data[:, dim] /= data[:, dim].max()
-
-        vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
-        vbo.create()
-        vbo.bind()
-        vbo.setUsagePattern(QOpenGLBuffer.StaticDraw)
-        vbo.allocate(data.data, data.data.nbytes)
-        vbo.release()
-
-        return vbo
-
-    def update_vbo(self, vbo, data, normalize=False):
-        data = np.atleast_2d(data.copy())
-
-        if normalize:
-            for dim in range(data.shape[1]):
-                data[:, dim] -= data[:, dim].min()
-                data[:, dim] /= data[:, dim].max()
-
-        vbo.bind()
-        vbo.allocate(data.data, data.data.nbytes)
-        vbo.release()
-
-        return vbo
-
-    def make_vao(self):
-        vao = QOpenGLVertexArrayObject()
-        vao.create()
-        return vao
-
     def enable(self, shader_program, gl):
         self.shader_program = shader_program
 
         try:
-            root_idcs = np.sort(np.unique(np.concatenate([
+            root_indices = np.sort(np.unique(np.concatenate([
                 self._old_regular.indices(),
                 self._new_regular.indices(),
                 self._old_representative.indices(),
                 self._new_representative.indices()
             ])))
-            N = root_idcs.size
+            N = root_indices.size
 
-            old_repr_indices = self._old_representative.root_indices_to_own(root_idcs)
-            new_repr_indices = self._new_representative.root_indices_to_own(root_idcs)
-            old_regular_indices = self._old_regular.root_indices_to_own(root_idcs)
-            new_regular_indices = self._new_regular.root_indices_to_own(root_idcs)
+            old_repr_indices = self._old_representative.root_indices_to_own(root_indices)
+            new_repr_indices = self._new_representative.root_indices_to_own(root_indices)
+            old_regular_indices = self._old_regular.root_indices_to_own(root_indices)
+            new_regular_indices = self._new_regular.root_indices_to_own(root_indices)
 
             v_has_old = np.array(np.logical_or(old_repr_indices != -1, old_regular_indices != -1), dtype=np.ubyte)
             v_has_new = np.array(np.logical_or(new_repr_indices != -1, new_regular_indices != -1), dtype=np.ubyte)
@@ -200,8 +165,8 @@ class DatasetView:
             v_is_repr_new = np.array(new_repr_indices != -1, dtype=np.ubyte)
 
         except AttributeError:
-            root_idcs = np.concatenate([self._new_regular.indices(), self._new_representative.indices()])
-            N = root_idcs.size
+            root_indices = np.concatenate([self._new_regular.indices(), self._new_representative.indices()])
+            N = root_indices.size
             v_position_old = np.zeros((N, 2), dtype=np.float32)
             v_position_new = np.array(np.concatenate([
                 self._new_regular.data()[:, :2],
@@ -211,25 +176,24 @@ class DatasetView:
             v_has_new = np.ones(N, dtype=np.ubyte)
             v_is_repr_old = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
             v_is_repr_new = np.array(np.concatenate([np.zeros(self._new_regular.n_points()), np.ones(self._new_representative.n_points())]), dtype=np.ubyte)
-        
+
         try:
-            v_colour = np.array(self._colour[root_idcs], dtype=np.float32)
+            v_colour = np.array(self._colour[root_indices], dtype=np.float32)
         except AttributeError:
             v_colour = np.zeros(N, dtype=np.float32)
 
-        self.root_idcs = root_idcs
+        self._root_indices = root_indices
 
         self._n_points = N
 
-        self._vao = self.make_vao()
+        self.set_vao(make_vao())
 
-        self._vbo['v_position_old'] = self.make_vbo(v_position_old)
-        self._vbo['v_position_new'] = self.make_vbo(v_position_new)
-        self._vbo['v_has_old'] = self.make_vbo(v_has_old)
-        self._vbo['v_has_new'] = self.make_vbo(v_has_new)
-        self._vbo['v_is_repr_old'] = self.make_vbo(v_is_repr_old)
-        self._vbo['v_is_repr_new'] = self.make_vbo(v_is_repr_new)
-        self._vbo['v_colour'] = self.make_vbo(v_colour)
+        self.set_vbo('v_position_old', make_vbo(v_position_old))
+        self.set_vbo('v_position_new', make_vbo(v_position_new))
+        self.set_vbo('v_has_old', make_vbo(v_has_old))
+        self.set_vbo('v_has_new', make_vbo(v_has_new))
+        self.set_vbo('v_is_repr_old', make_vbo(v_is_repr_old))
+        self.set_vbo('v_is_repr_new', make_vbo(v_is_repr_new))
 
         self.enable_vbo_attribute('v_position_old', dtype=gl.GL_FLOAT, tuple_size=2)
         self.enable_vbo_attribute('v_position_new', dtype=gl.GL_FLOAT, tuple_size=2)
@@ -237,20 +201,29 @@ class DatasetView:
         self.enable_vbo_attribute('v_has_new', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
         self.enable_vbo_attribute('v_is_repr_old', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
         self.enable_vbo_attribute('v_is_repr_new', dtype=gl.GL_UNSIGNED_BYTE, tuple_size=1)
-        self.enable_vbo_attribute('v_colour', dtype=gl.GL_FLOAT, tuple_size=1)
 
         self._is_active = True
 
-    def add_colour(self, colour):
-        self._colour = colour
-        v_colour = np.array(self._colour[self.root_idcs], dtype=np.float32)
-        self.update_vbo(self._vbo['v_colour'], v_colour)
+    def vao(self):
+        return self._vao
 
-    def enable_vbo_attribute(self, name, dtype, tuple_size):
-        self._vao.bind()
-        attribute_loc = self.shader_program.attributeLocation(name)
+    def set_vao(self, vao):
+        self._vao = vao
+
+    def vbo(self, name):
+        return self._vbo[name]
+
+    def set_vbo(self, name, vbo):
+        self._vbo[name] = vbo
+
+    def enable_vbo_attribute(self, vbo_name, dtype, tuple_size):
+        vbo = self.vbo(vbo_name)
+        self.vao().bind()
+
+        attribute_loc = self.shader_program.attributeLocation(vbo_name)
+
         self.shader_program.enableAttributeArray(attribute_loc)
-        self._vbo[name].bind()
+        vbo.bind()
         self.shader_program.setAttributeBuffer(
             attribute_loc,  # Attribute location
             dtype,          # Data type of elements
@@ -258,29 +231,15 @@ class DatasetView:
             tuple_size,     # Number of components per vertex
             0               # Stride
         )
-        self._vbo[name].release()
-        self._vao.release()
+        vbo.release()
+        self.vao().release()
 
     def disable(self):
-        self._vao.bind()
-        self.shader_program.disableAttributeArray('v_position_old')
-        self.shader_program.disableAttributeArray('v_position_new')
-        self.shader_program.disableAttributeArray('v_has_old')
-        self.shader_program.disableAttributeArray('v_has_new')
-        self.shader_program.disableAttributeArray('v_is_repr_old')
-        self.shader_program.disableAttributeArray('v_is_repr_new')
-        self.shader_program.disableAttributeArray('v_colour')
-        self._vao.release()
+        self.vao().destroy()
 
-        self._vbo['v_position_old'].destroy()
-        self._vbo['v_position_new'].destroy()
-        self._vbo['v_has_old'].destroy()
-        self._vbo['v_has_new'].destroy()
-        self._vbo['v_is_repr_old'].destroy()
-        self._vbo['v_is_repr_new'].destroy()
-        self._vbo['v_colour'].destroy()
-
-        self._vao.destroy()
+        for vbo_name, vbo in self._vbo.items():
+            self.shader_program.disableAttributeArray(vbo_name)
+            vbo.destroy()
 
         self._is_active = False
 
@@ -288,9 +247,6 @@ class DatasetView:
         self.shader_program.setUniformValue('u_view_old', self._view_old)
         self.shader_program.setUniformValue('u_view_new', self._view_new)
 
-        self._vao.bind()
+        self.vao().bind()
         gl.glDrawArrays(gl.GL_POINTS, 0, self._n_points)
-        self._vao.release()
-
-    def __iter__(self):
-        return iter(self.datasets())
+        self.vao().release()

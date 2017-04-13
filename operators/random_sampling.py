@@ -5,7 +5,11 @@ from operators import Operator
 
 
 def random_sampling(source, n_samples, sort=True):
-    idcs_in_source = np.random.choice(source.n_points(), n_samples, replace=False)
+    if n_samples < source.n_points():
+        idcs_in_source = np.random.choice(source.n_points(), min(n_samples, source.n_points()), replace=False)
+    else:
+        print('Warning: Sample size larger than (or eq. to) source. Using all source samples.')
+        idcs_in_source = np.arange(source.n_points())
 
     if sort:
         idcs_in_source.sort()

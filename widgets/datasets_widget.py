@@ -120,18 +120,18 @@ class DatasetsWidget(QWidget):
 
         # Subsample the dataset for representatives.
         representatives_nd = random_sampling(dataset, n_repr)
-        dataset_diff_nd = difference(dataset, representatives_nd)
+        nonrepresentatives_nd = difference(dataset, representatives_nd)
 
         if dataset.n_dimensions() > 2:
             # Project with MDS+LAMP
-            representatives_2d = mds_projection(representatives_nd, n_components=2)
-            dataset_diff_2d = lamp_projection(dataset_diff_nd, representatives_nd, representatives_2d)
+            representatives_2d = mds_projection(representatives_nd)
+            nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
         elif dataset.n_dimensions() == 2:
             # Don't project, since dimensionality is 2.
             representatives_2d = representatives_nd
-            dataset_diff_2d = dataset_diff_nd
+            nonrepresentatives_2d = nonrepresentatives_nd
 
-        self.dataset_view_renderer.show_dataset(dataset_diff_2d, representatives_2d, fit_to_view=True)
+        self.dataset_view_renderer.show_dataset(nonrepresentatives_2d, representatives_2d, fit_to_view=True)
 
         # Set labels, if they were given in the same file.
         if labels is not None:
