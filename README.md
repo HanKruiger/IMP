@@ -1,5 +1,7 @@
 # IMP
 
+Interactive Multiscale Projections
+
 ## Run
 
 First, create a virtual environment and (locally) install the required packages:
@@ -14,8 +16,6 @@ Then run with:
 ```bash
 ./imp.py
 ```
-
-Interactive Multiscale Projections
 
 ## Roadmap
 
