@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
+from PyQt5.QtChart import *
 
 import numpy as np
 
@@ -32,6 +33,22 @@ class IMPWindow(QMainWindow):
 
         visual_options_bar = QToolBar('Visual options')
         self.addToolBar(Qt.RightToolBarArea, visual_options_bar)
+
+        series = QLineSeries()
+        series.append(0, 6)
+        series.append(2, 4)
+        series.append(3, 8)
+        series.append(7, 4)
+        series.append(10, 5)
+        chart = QChart()
+        chart.addSeries(series)
+        chart.createDefaultAxes()
+        chart.setTitle('Line chart')
+        plot = QChartView(chart)
+        plot.setRenderHint(QPainter.Antialiasing)
+        stats_bar = QToolBar('Statistics')
+        stats_bar.addWidget(plot)
+        self.addToolBar(Qt.BottomToolBarArea, stats_bar)
 
         self.visuals_widget = VisualsWidget(imp_window=self)
         visual_options_bar.addWidget(self.visuals_widget)
