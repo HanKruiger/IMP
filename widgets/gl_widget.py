@@ -37,9 +37,10 @@ class GLWidget(QOpenGLWidget):
         wheel_event.accept()
 
         factor = 1.01 ** wheel_event.pixelDelta().y()
-        
-        self.dataset_view_renderer.zoom(factor, wheel_event.pos())
-        
+        # self.dataset_view_renderer.zoom(factor, wheel_event.pos())
+        if factor > 1:
+            self.hierarchical_zoom()
+
         self.update()
 
     def keyPressEvent(self, key_event):

@@ -4,7 +4,7 @@ import sys
 
 # Check if we're in a virtual environment.
 if sys.prefix == sys.base_prefix:
-    raise Exception('Not using a virtual environment! Consider making/activating one. (See README.md)')
+    raise Exception('Not using a virtual environment! (See README.md)')
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QSurfaceFormat

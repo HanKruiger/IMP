@@ -9,6 +9,8 @@ import numpy as np
 from collections import defaultdict
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from sklearn.neighbors import KDTree
+import time
 
 
 class Dataset(QObject):
@@ -36,6 +38,17 @@ class Dataset(QObject):
         
         Dataset.labels = labels
         return True
+
+    @staticmethod
+    def root_tree():
+        try:
+            return Dataset.tree
+        except AttributeError:
+            t_0 = time.time()
+            Dataset.tree = KDTree(Dataset.root.data())
+            print('Computing tree took {:.2f} s.'.format(time.time() - t_0))
+            return Dataset.root_tree()
+            
 
     def name(self):
         return self._name

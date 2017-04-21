@@ -63,8 +63,6 @@ class DatasetsWidget(QWidget):
             the_union = self.dataset_view_renderer.current_union()
             closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
 
-            print('Selected the {} closest points'.format(closest.n_points()))
-
             # Use a fraction of the closest points as new representatives
             n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
             representatives_2d = random_sampling(closest, n_repr)
@@ -72,7 +70,8 @@ class DatasetsWidget(QWidget):
 
             # Fetch new points from the big dataset
             n_fetch = N_max - closest.n_points()
-            nd_closest = knn_fetching(closest, n_fetch)
+            closest_nd = root_selection(closest)
+            knn_nd = knn_fetching(closest_nd, n_fetch, remove_query_points=True)
 
             # Remove the representatives from the closest points, and get the nd data of those
             closest_diff = difference(closest, representatives_2d)
@@ -80,7 +79,7 @@ class DatasetsWidget(QWidget):
 
             # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
             # using the picked representatives as fixed representatives.
-            new_neighbours_2d = lamp_projection(union(nd_closest, closest_diff_root), representatives_nd, representatives_2d)
+            new_neighbours_2d = lamp_projection(union(knn_nd, closest_diff_root), representatives_nd, representatives_2d)
             
             # Schedule that the projection is shown.
             self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
