@@ -25,10 +25,13 @@ class GLWidget(QOpenGLWidget):
     def mousePressEvent(self, e):
         self.mouse_when_clicked = QVector2D(e.pos())
 
-    def hierarchical_zoom(self):
+    def nd_zoom_in(self):
         world_pos = self.dataset_view_renderer.pixel_to_world(self.mouse_pos)
         world_pos = np.array([world_pos.x(), world_pos.y()])
-        self.imp_window.datasets_widget.hierarchical_zoom(world_pos)
+        self.imp_window.datasets_widget.nd_zoom_in(world_pos)
+
+    def nd_zoom_out(self):
+        self.imp_window.datasets_widget.nd_zoom_out()
 
     def wheelEvent(self, wheel_event):
         if wheel_event.pixelDelta().y() == 0:
@@ -39,7 +42,9 @@ class GLWidget(QOpenGLWidget):
         factor = 1.01 ** wheel_event.pixelDelta().y()
         # self.dataset_view_renderer.zoom(factor, wheel_event.pos())
         if factor > 1:
-            self.hierarchical_zoom()
+            self.nd_zoom_in()
+        elif factor < 1:
+            self.nd_zoom_out()
 
         self.update()
 

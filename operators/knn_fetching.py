@@ -6,10 +6,11 @@ from scipy.spatial.distance import cdist
 
 from model import Dataset
 from operators.root_selection import root_selection
+from operators.random_sampling import random_sampling
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
-def knn_fetching_naive(query, n_samples, remove_query_points=True, sort=True, verbose=True):
+def knn_fetching_naive_zi(query, n_samples, remove_query_points=True, sort=True, verbose=True):
     t_0 = time.time()
 
     X = Dataset.root.data()
@@ -43,7 +44,7 @@ def knn_fetching_naive(query, n_samples, remove_query_points=True, sort=True, ve
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
-def knn_fetching(query_nd, n_samples, remove_query_points=True, sort=True, verbose=1):
+def knn_fetching_zi(query_nd, n_samples, remove_query_points=True, sort=True, verbose=1):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
     tree = Dataset.root_tree()
 
@@ -51,10 +52,11 @@ def knn_fetching(query_nd, n_samples, remove_query_points=True, sort=True, verbo
 
     # In the worst case, we need to fetch this many points per query point.
     # (Because everything can overlap)
-    k = n_samples + query_nd.n_points()
+    # k = n_samples + query_nd.n_points()
+    k = n_samples
 
     debug_time = time.time()
-    dists, indices = tree.query(query_nd.data(), k=n_samples)
+    dists, indices = tree.query(query_nd.data(), k=k)
     if verbose > 1:
         print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
 
@@ -111,5 +113,43 @@ def knn_fetching(query_nd, n_samples, remove_query_points=True, sort=True, verbo
 
     if verbose:
         print('knn_fetching took {:.2f} seconds.'.format(time.time() - t_0))
+
+    return dataset
+
+
+def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
+    assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
+    tree = Dataset.root_tree()
+
+    t_0 = time.time()
+
+    debug_time = time.time()
+    _, indices = tree.query(query_nd.data(), k=k)
+    if verbose > 1:
+        print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
+
+    # Get the unique indices, and where they are in the array
+    unique_idcs = np.unique(indices.flatten())
+    
+    if sort:
+        unique_idcs.sort()
+
+    query_result_data = Dataset.root.data()[unique_idcs, :]
+    query_result = Dataset(query_result_data, unique_idcs, name='Query result.')
+
+    if verbose > 1:
+        print('Found {} unique observations for zoom-out.'.format(unique_idcs.size))
+
+    if unique_idcs.size > n_samples:
+        if verbose > 1:
+            print('Subsampling {} observations to {}.'.format(unique_idcs.size, n_samples))
+        dataset = random_sampling(query_result, n_samples)
+    else:
+        dataset = query_result
+    
+
+
+    if verbose:
+        print('knn_fetching_zo took {:.2f} seconds.'.format(time.time() - t_0))
 
     return dataset

@@ -53,38 +53,60 @@ class DatasetsWidget(QWidget):
         self.vbox_main.addLayout(drops_hbox)
         self.setLayout(self.vbox_main)
 
-    def hierarchical_zoom(self, mouse_pos, zoomin=True):
+    def nd_zoom_in(self, mouse_pos):
         zoom_fraction = self.get('zoom_fraction')
         repr_fraction = self.get('repr_fraction')
         N_max = self.get('N_max')
         
-        if zoomin:
-            # Get the fraction of closest points to the mouse.
-            the_union = self.dataset_view_renderer.current_union()
-            closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
+        # Get the fraction of closest points to the mouse.
+        the_union = self.dataset_view_renderer.current_union()
+        closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
 
-            # Use a fraction of the closest points as new representatives
-            n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
-            representatives_2d = random_sampling(closest, n_repr)
-            representatives_nd = root_selection(representatives_2d)
+        # Use a fraction of the closest points as new representatives
+        n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
+        representatives_2d = random_sampling(closest, n_repr)
+        representatives_nd = root_selection(representatives_2d)
 
-            # Fetch new points from the big dataset
-            n_fetch = N_max - closest.n_points()
-            closest_nd = root_selection(closest)
-            knn_nd = knn_fetching(closest_nd, n_fetch, remove_query_points=True)
+        # Fetch new points from the big dataset
+        n_fetch = N_max - closest.n_points()
+        closest_nd = root_selection(closest)
+        knn_nd = knn_fetching_zi(closest_nd, n_fetch, remove_query_points=True)
 
-            # Remove the representatives from the closest points, and get the nd data of those
-            closest_diff = difference(closest, representatives_2d)
-            closest_diff_root = root_selection(closest_diff)
+        # Make sure all points from the query are also in the result. (Continuity)
+        closest_nonrepresentatives_2d = difference(closest, representatives_2d)
+        closest_nonrepresentatives_nd = root_selection(closest_nonrepresentatives_2d)
+        nonrepresentatives_nd = union(knn_nd, closest_nonrepresentatives_nd)
 
-            # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
-            # using the picked representatives as fixed representatives.
-            new_neighbours_2d = lamp_projection(union(knn_nd, closest_diff_root), representatives_nd, representatives_2d)
-            
-            # Schedule that the projection is shown.
-            self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
-        else:
-            raise NotImplementedError
+        # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
+        # using the picked representatives as fixed representatives.
+        new_neighbours_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
+        
+        # Schedule that the projection is shown.
+        self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
+
+    def nd_zoom_out(self):
+        N_max = self.get('N_max')
+        k = round(self.get('zoom_fraction')**(-1) * N_max)
+        n_repr = round(N_max * self.get('repr_fraction'))
+
+        print('Zooming out with k = {}'.format(k))
+
+        the_union = self.dataset_view_renderer.current_union()
+        the_union_nd = root_selection(the_union)
+
+        representatives_2d = random_sampling(the_union, n_repr)
+        representatives_nd = root_selection(representatives_2d)
+
+        knn_zo_nd = knn_fetching_zo(the_union_nd, k=k, n_samples=N_max)
+        nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
+
+        # representatives_nd = random_sampling(knn_zo_nd, n_repr)
+        # nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
+
+        # representatives_2d = mds_projection(representatives_nd)
+        nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
+
+        self.dataset_view_renderer.interpolate_to_dataset(nonrepresentatives_2d, representatives_2d)
 
     def reproject_current_view(self):
         current_view = self.dataset_view_renderer.current_view()
