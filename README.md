@@ -7,8 +7,8 @@ Interactive Multiscale Projections
 First, create a virtual environment and (locally) install the required packages:
 
 ```bash
-python3 -m venv imp_venv
-source ./imp_venv/bin/activate
+python3 -m venv venv
+source ./venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
