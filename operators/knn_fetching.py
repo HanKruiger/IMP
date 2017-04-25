@@ -138,11 +138,11 @@ def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
     query_result = Dataset(query_result_data, unique_idcs, name='Query result.')
 
     if verbose > 1:
-        print('Found {} unique observations for zoom-out.'.format(unique_idcs.size))
+        print('\tFound {} unique observations for zoom-out.'.format(unique_idcs.size))
 
     if unique_idcs.size > n_samples:
         if verbose > 1:
-            print('Subsampling {} observations to {}.'.format(unique_idcs.size, n_samples))
+            print('\tSubsampling {} observations to {}.'.format(unique_idcs.size, n_samples))
         dataset = random_sampling(query_result, n_samples)
     else:
         dataset = query_result

@@ -33,11 +33,17 @@ class DatasetsWidget(QWidget):
 
         parameters_group = QGroupBox('Projection control')
         parameters_layout = QVBoxLayout()
+        self.keep_representatives_checkbox = QCheckBox('Keep representatives')
+        parameters_layout.addWidget(self.keep_representatives_checkbox)
         reproject_button = QPushButton('Reproject')
         reproject_button.clicked.connect(self.reproject_current_view)
         parameters_layout.addWidget(reproject_button)
         for _, slider in self.sliders.items():
             parameters_layout.addLayout(slider)
+
+        self.zo_continuity_checkbox = QCheckBox('Zoom-out continuity')
+        self.zo_continuity_checkbox.setChecked(True)
+        parameters_layout.addWidget(self.zo_continuity_checkbox)
 
         parameters_group.setLayout(parameters_layout)
 
@@ -89,41 +95,51 @@ class DatasetsWidget(QWidget):
         k = round(self.get('zoom_fraction')**(-1) * N_max)
         n_repr = round(N_max * self.get('repr_fraction'))
 
-        print('Zooming out with k = {}'.format(k))
-
         the_union = self.dataset_view_renderer.current_union()
         the_union_nd = root_selection(the_union)
 
-        representatives_2d = random_sampling(the_union, n_repr)
-        representatives_nd = root_selection(representatives_2d)
-
         knn_zo_nd = knn_fetching_zo(the_union_nd, k=k, n_samples=N_max)
+        
+        if self.zo_continuity_checkbox.isChecked():
+            representatives_2d = random_sampling(the_union, n_repr)
+            representatives_nd = root_selection(representatives_2d)
+        else:
+            representatives_nd = random_sampling(knn_zo_nd, n_repr)
+            representatives_2d = mds_projection(representatives_nd)
+        
         nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
-
-        # representatives_nd = random_sampling(knn_zo_nd, n_repr)
-        # nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
-
-        # representatives_2d = mds_projection(representatives_nd)
         nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
+
+
 
         self.dataset_view_renderer.interpolate_to_dataset(nonrepresentatives_2d, representatives_2d)
 
     def reproject_current_view(self):
         current_view = self.dataset_view_renderer.current_view()
 
-        # Get the representative and regular datasets from the current view
-        representative = current_view.new_representative()
-        regular = current_view.new_regular()
-        
-        # Get the nd data corresponding to the 2D points
-        representative_nd = root_selection(representative)
-        regular_nd = root_selection(regular)
+        if self.keep_representatives_checkbox.isChecked():
+            # Get the representative and regular datasets from the current view
+            old_representatives_2d = current_view.new_representative()
+            old_nonrepresentatives_2d = current_view.new_regular()
+            
+            # Get the nd data corresponding to the 2D points
+            representatives_nd = root_selection(old_representatives_2d)
+            nonrepresentatives_nd = root_selection(old_nonrepresentatives_2d)
+        else:
+            N_max = self.get('N_max')
+            n_repr = round(N_max * self.get('repr_fraction'))
+
+            the_union = self.dataset_view_renderer.current_union()
+            the_union_nd = root_selection(the_union)
+
+            representatives_nd = random_sampling(the_union_nd, n_repr)
+            nonrepresentatives_nd = difference(the_union_nd, representatives_nd)
 
         # Reproject the nd datapoints
-        representative_reprojected = mds_projection(representative_nd)
-        regular_reprojected = lamp_projection(regular_nd, representative_nd, representative_reprojected)
+        representatives_2d = mds_projection(representatives_nd)
+        nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
 
-        self.dataset_view_renderer.interpolate_to_dataset(regular_reprojected, representative_reprojected)
+        self.dataset_view_renderer.interpolate_to_dataset(nonrepresentatives_2d, representatives_2d)
 
     @pyqtSlot(object, object)
     def handle_reader_results(self, X, labels):
