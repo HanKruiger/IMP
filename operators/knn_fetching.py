@@ -44,7 +44,7 @@ def knn_fetching_naive_zi(query, n_samples, remove_query_points=True, sort=True,
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
-def knn_fetching_zi(query_nd, n_samples, remove_query_points=True, sort=True, verbose=1):
+def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
     tree = Dataset.root_tree()
 
@@ -53,7 +53,6 @@ def knn_fetching_zi(query_nd, n_samples, remove_query_points=True, sort=True, ve
     # In the worst case, we need to fetch this many points per query point.
     # (Because everything can overlap)
     # k = n_samples + query_nd.n_points()
-    k = n_samples
 
     debug_time = time.time()
     dists, indices = tree.query(query_nd.data(), k=k)
@@ -87,6 +86,10 @@ def knn_fetching_zi(query_nd, n_samples, remove_query_points=True, sort=True, ve
 
     # Get the unique indices, and where they are in the array
     unique_idcs, idx_starts, counts = np.unique(indices_c, return_index=True, return_counts=True)
+
+    if unique_idcs.size < n_samples:
+        print('\t{}-nn was too few (only {} unique results, needed {}) retrying with {}-nn...'.format(k, unique_idcs.size, n_samples, 2*k))
+        return knn_fetching_zi(query_nd, n_samples, k * 2, remove_query_points=remove_query_points, sort=sort, verbose=verbose)
 
     # Reduce to the smallest distance per unique index.
     debug_time = time.time()

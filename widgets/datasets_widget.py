@@ -76,7 +76,7 @@ class DatasetsWidget(QWidget):
         # Fetch new points from the big dataset
         n_fetch = N_max - closest.n_points()
         closest_nd = root_selection(closest)
-        knn_nd = knn_fetching_zi(closest_nd, n_fetch, remove_query_points=True)
+        knn_nd = knn_fetching_zi(closest_nd, n_fetch, k=max(2, round(n_fetch / closest_nd.n_points())), remove_query_points=True)
 
         # Make sure all points from the query are also in the result. (Continuity)
         closest_nonrepresentatives_2d = difference(closest, representatives_2d)
@@ -109,8 +109,6 @@ class DatasetsWidget(QWidget):
         
         nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
         nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
-
-
 
         self.dataset_view_renderer.interpolate_to_dataset(nonrepresentatives_2d, representatives_2d)
 
