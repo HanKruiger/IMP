@@ -112,7 +112,7 @@ def knn_fetching_zi(query_nd, n_samples, remove_query_points=True, sort=True, ve
     dataset = Dataset(data, idcs_in_root, name='KNN fetching') 
 
     if verbose:
-        print('knn_fetching took {:.2f} seconds.'.format(time.time() - t_0))
+        print('knn_fetching took {:.2f} seconds.\n'.format(time.time() - t_0))
 
     return dataset
 
@@ -150,6 +150,6 @@ def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
 
 
     if verbose:
-        print('knn_fetching_zo took {:.2f} seconds.'.format(time.time() - t_0))
+        print('knn_fetching_zo took {:.2f} seconds.\n'.format(time.time() - t_0))
 
     return dataset
