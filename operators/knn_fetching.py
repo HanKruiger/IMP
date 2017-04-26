@@ -55,7 +55,13 @@ def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True,
     # k = n_samples + query_nd.n_points()
 
     debug_time = time.time()
-    dists, indices = tree.query(query_nd.data(), k=k)
+    # dists, indices = tree.query(query_nd.data(), k=k)
+    dists = np.zeros((query_nd.n_points(), k))
+    indices = np.zeros((query_nd.n_points(), k), dtype=np.int)
+    for i, root_id in enumerate(query_nd.indices()):
+        res = tree.get_nns_by_item(root_id, k, include_distances=True)
+        indices[i, :] = res[0]
+        dists[i, :] = res[1]
     if verbose > 1:
         print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
 
@@ -127,7 +133,13 @@ def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
     t_0 = time.time()
 
     debug_time = time.time()
-    _, indices = tree.query(query_nd.data(), k=k)
+
+    indices = np.zeros((query_nd.n_points(), k), dtype=np.int)
+    for i, root_id in enumerate(query_nd.indices()):
+        res = tree.get_nns_by_item(root_id, k, include_distances=False)
+        indices[i, :] = res
+
+    # _, indices = tree.query(query_nd.data(), k=k)
     if verbose > 1:
         print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
 

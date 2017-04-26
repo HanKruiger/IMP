@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.neighbors import KDTree
 import time
+import annoy
 
 
 class Dataset(QObject):
@@ -42,11 +43,19 @@ class Dataset(QObject):
     @staticmethod
     def root_tree():
         try:
-            return Dataset.tree
+            return Dataset.annoy_tree
         except AttributeError:
+            # Build the tree
             t_0 = time.time()
-            Dataset.tree = KDTree(Dataset.root.data())
+            tree = annoy.AnnoyIndex(Dataset.root.n_dimensions())
+            for i in range(Dataset.root.n_points()):
+                tree.add_item(i, Dataset.root.data()[i, :])
+            tree.build(10)
+            Dataset.annoy_tree = tree
+
             print('Computing tree took {:.2f} s.'.format(time.time() - t_0))
+            
+            # Try again.
             return Dataset.root_tree()
             
 
