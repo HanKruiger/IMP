@@ -29,10 +29,10 @@ class Reader(Operator):
         if path.endswith('.nd') or path.endswith('.2d'):
             X, internal_labels = self.read_nd(path)
         else:
-            X = np.loadtxt(path)
-
+            X = np.load(path)
 
         if X.ndim == 1:
+            X = np.array(X, dtype=np.float)
             # Normalize single-dimensional datasets (these are often, if not always, labels)
             X -= X.min()
             X /= X.max()
