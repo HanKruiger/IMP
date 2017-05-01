@@ -10,31 +10,25 @@ from operators.random_sampling import random_sampling
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
-def knn_fetching_naive_zi(query, n_samples, remove_query_points=True, sort=True, verbose=True):
+def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, sort=True, verbose=True):
     t_0 = time.time()
 
-    X = Dataset.root.data()
-    query_idcs = query.indices()
-
-    # Query data
-    Y = X[query_idcs, :]
-
-    # Retrieve the root data on indices where the query is NOT.
-    # (I.e., all candidates)
-    source_idcs = np.delete(np.arange(Dataset.root.n_points()), query_idcs)
-    X_search = X[source_idcs, :]
+    if source is None:
+        source = Dataset.root
 
     # Compute smallest distances from all root points to all query points.
-    dists = cdist(Y, X_search, metric='euclidean').min(axis=0)
-    # Retrieve indices (in X_search!) where the distances are smallest
+    dists = cdist(query.data(), source.data(), metric='euclidean').min(axis=0)
+    # Retrieve indices (in source!) where the distances are smallest
     smallest_dist_idcs = np.argpartition(dists, n_samples)[:n_samples]
     # Get the corresponding indices in the root dataset
-    idcs_in_root = source_idcs[smallest_dist_idcs]
+    idcs_in_root = source.indices()[smallest_dist_idcs]
 
     if sort:
-        idcs_in_root.sort()
+        order = np.argsort(idcs_in_root)
+        idcs_in_root = idcs_in_root[order]
+        smallest_dist_idcs = smallest_dist_idcs[order]
 
-    data = X[idcs_in_root, :]
+    data = source.data()[smallest_dist_idcs, :]
     dataset = Dataset(data, idcs_in_root, name='KNN fetching')
 
     if verbose:
@@ -126,7 +120,7 @@ def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True,
     return dataset
 
 
-def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
+def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
     tree = Dataset.root_tree()
 
@@ -139,12 +133,15 @@ def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
         res = tree.get_nns_by_item(root_id, k, include_distances=False)
         indices[i, :] = res
 
-    # _, indices = tree.query(query_nd.data(), k=k)
     if verbose > 1:
         print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
 
     # Get the unique indices, and where they are in the array
     unique_idcs = np.unique(indices.flatten())
+
+    if verbose > 1:
+        print('\tSearched for {} neighbours of {} observations.'.format(k, query_nd.n_points()))
+        print('\tFound {} observations ({} unique)'.format(indices.size, unique_idcs.size))
     
     if sort:
         unique_idcs.sort()
@@ -155,16 +152,29 @@ def knn_fetching_zo(query_nd, k, n_samples, sort=True, verbose=2):
     if verbose > 1:
         print('\tFound {} unique observations for zoom-out.'.format(unique_idcs.size))
 
-    if unique_idcs.size > n_samples:
+    if unique_idcs.size > N_max:
         if verbose > 1:
-            print('\tSubsampling {} observations to {}.'.format(unique_idcs.size, n_samples))
-        dataset = random_sampling(query_result, n_samples)
+            print('\tSubsampling {} observations to {}.'.format(unique_idcs.size, N_max))
+        dataset = random_sampling(query_result, N_max)
     else:
         dataset = query_result
-    
-
 
     if verbose:
         print('knn_fetching_zo took {:.2f} seconds.\n'.format(time.time() - t_0))
 
     return dataset
+
+def knn_fetching_zo_2(query_nd, k, N_max, sort=True, verbose=2):
+    assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
+
+    root_subsampling_size = 5 * N_max
+
+    t_0 = time.time()
+    subsampled_root = random_sampling(Dataset.root, root_subsampling_size)
+
+    closest_from_subsampled_root = pointset_knn_naive(query_nd, N_max, source=subsampled_root)
+
+    if verbose:
+        print('knn_fetching_zo_2 took {:.2f} seconds.\n'.format(time.time() - t_0))
+
+    return closest_from_subsampled_root

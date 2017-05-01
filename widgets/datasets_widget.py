@@ -98,7 +98,7 @@ class DatasetsWidget(QWidget):
         the_union = self.dataset_view_renderer.current_union()
         the_union_nd = root_selection(the_union)
 
-        knn_zo_nd = knn_fetching_zo(the_union_nd, k=k, n_samples=N_max)
+        knn_zo_nd = knn_fetching_zo_2(the_union_nd, k=k, N_max=N_max)
         
         if self.zo_continuity_checkbox.isChecked():
             representatives_2d = random_sampling(the_union, n_repr)

@@ -46,14 +46,14 @@ class Dataset(QObject):
             return Dataset.annoy_tree
         except AttributeError:
             # Build the tree
+            print('Building ANN trees.')
             t_0 = time.time()
             tree = annoy.AnnoyIndex(Dataset.root.n_dimensions())
             for i in range(Dataset.root.n_points()):
                 tree.add_item(i, Dataset.root.data()[i, :])
             tree.build(10)
             Dataset.annoy_tree = tree
-
-            print('Computing tree took {:.2f} s.'.format(time.time() - t_0))
+            print('Building trees took {:.2f} s.'.format(time.time() - t_0))
             
             # Try again.
             return Dataset.root_tree()
