@@ -66,20 +66,20 @@ class DatasetsWidget(QWidget):
         
         # Get the fraction of closest points to the mouse.
         the_union = self.dataset_view_renderer.current_union()
-        closest = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
+        query_2d = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
 
         # Use a fraction of the closest points as new representatives
-        n_repr = round(repr_fraction * closest.n_points() / zoom_fraction)
-        representatives_2d = random_sampling(closest, n_repr)
+        n_repr = round(repr_fraction * query_2d.n_points() / zoom_fraction)
+        representatives_2d = random_sampling(query_2d, n_repr)
         representatives_nd = root_selection(representatives_2d)
 
         # Fetch new points from the big dataset
-        n_fetch = N_max - closest.n_points()
-        closest_nd = root_selection(closest)
-        knn_nd = knn_fetching_zi(closest_nd, n_fetch, k=max(2, round(n_fetch / closest_nd.n_points())), remove_query_points=True)
+        n_samples = N_max - query_2d.n_points()
+        query_nd = root_selection(query_2d)
+        knn_nd = Dataset.root.knn_pointset(query_dataset=query_nd, n_samples=n_samples, remove_query_points=True)
 
         # Make sure all points from the query are also in the result. (Continuity)
-        closest_nonrepresentatives_2d = difference(closest, representatives_2d)
+        closest_nonrepresentatives_2d = difference(query_2d, representatives_2d)
         closest_nonrepresentatives_nd = root_selection(closest_nonrepresentatives_2d)
         nonrepresentatives_nd = union(knn_nd, closest_nonrepresentatives_nd)
 

@@ -46,86 +46,7 @@ def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
 def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True, verbose=2):
-    assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
-    tree = Dataset.root.tree()
-
-    t_0 = time.time()
-
-    # In the worst case, we need to fetch this many points per query point.
-    # (Because everything can overlap)
-    # k = n_samples + query_nd.n_points()
-
-    debug_time = time.time()
-    # dists, indices = tree.query(query_nd.data(), k=k)
-    dists = np.zeros((query_nd.n_points(), k))
-    indices = np.zeros((query_nd.n_points(), k), dtype=np.int)
-    for i, root_id in enumerate(query_nd.indices()):
-        res = tree.get_nns_by_item(root_id, k, include_distances=True)
-        indices[i, :] = res[0]
-        dists[i, :] = res[1]
-    if verbose > 1:
-        print('\tQuerying tree took {:.2f} s'.format(time.time() - debug_time))
-
-    # dists: Every row 'i' contains the k smallest distances from query point 'i' to all root data points.
-    # indices: Every row contains indices to root data, corresponding to the values in 'dists'.
-
-    # Mask array that masks indices that are also in the query.
-    # (We don't want these as result.)
-    mask = np.zeros_like(indices, dtype=np.bool)
-    if remove_query_points:
-        debug_time = time.time()
-        for i in range(indices.shape[0]):
-            mask[i, :] = np.in1d(indices[i, :], query_nd.indices())
-        if verbose > 1:
-            print('\tRemoving query points took {:.2f} s'.format(time.time() - debug_time))
-
-    m_indices = ma.masked_array(indices, mask=mask)
-    m_dists = ma.masked_array(dists, mask=mask)
-    indices_c = m_indices.compressed()
-    dists_c = m_dists.compressed()
-
-    debug_time = time.time()
-    idx_sort = np.argsort(indices_c)
-    indices_c = indices_c[idx_sort]
-    dists_c = dists_c[idx_sort]
-    if verbose > 1:
-        print('\tSorting indices took {:.2f} s'.format(time.time() - debug_time))
-
-    # Get the unique indices, and where they are in the array
-    unique_idcs, idx_starts, counts = np.unique(indices_c, return_index=True, return_counts=True)
-
-    if unique_idcs.size < n_samples:
-        print('\t{}-nn was too few (only {} unique results, needed {}) retrying with {}-nn...'.format(k, unique_idcs.size, n_samples, 2*k))
-        return knn_fetching_zi(query_nd, n_samples, k * 2, remove_query_points=remove_query_points, sort=sort, verbose=verbose)
-
-    # Reduce to the smallest distance per unique index.
-    debug_time = time.time()
-    min_dists = np.zeros_like(unique_idcs)
-    for i, (idx_start, count) in enumerate(zip(idx_starts, counts)):
-        min_dists[i] = dists_c[idx_start:idx_start + count].min()
-    if verbose > 1:
-        print('\tFinding min_dists took {:.2f} s'.format(time.time() - debug_time))
-
-    if unique_idcs.size > n_samples:
-        # Use only the n_samples closest samples for the result.
-        closest_idcs = np.argpartition(min_dists, n_samples)[:n_samples]
-        idcs_in_root = unique_idcs[closest_idcs]
-    else:
-        idcs_in_root = unique_idcs
-        if unique_idcs.size < n_samples:
-            print('WARNING: Returning fewer samples than requested, because more were not found!')
-
-    if sort:
-        idcs_in_root.sort()
-
-    data = Dataset.root.data()[idcs_in_root, :]
-    dataset = Dataset(data, idcs_in_root, name='KNN fetching') 
-
-    if verbose:
-        print('knn_fetching took {:.2f} seconds.\n'.format(time.time() - t_0))
-
-    return dataset
-
+    return Dataset.root.knn_pointset(n_samples, query_dataset=query_nd, remove_query_points=True, method='tree')
 
 def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
@@ -178,32 +99,25 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
 
     L_lower = N_max
     L_upper = None
-    L_candidate = None
+    L_candidate = L_lower
 
     # Binary (?) search
     iters = 0
     while True and iters < max_iters:
-        if L_upper is None:
-            if L_candidate is None:
-                L_candidate = L_lower
-            else:
-                L_candidate = L_lower * 2
-        else:
-            L_candidate = round((L_lower + L_upper) / 2)
-
         D_s = random_sampling(Dataset.root, L_candidate)
-        result, dists = pointset_knn_naive(query_nd, N_max, source=D_s, return_distances=True)
+        result = pointset_knn_naive(query_nd, N_max, source=D_s)
         
         normalized_error = result.radius() / (zoom_factor * query_nd.radius()) - 1
         
         if verbose > 1:
             print('L search:\n\tcandidate: {}\n\tlower: {}\n\tupper: {}\n\terror: {}'.format(L_candidate, L_lower, L_upper, normalized_error))
         
-        # Note: We do not check for absolute error, because we want to guarantee radius increase.
+        # Note: We only accept positive errors, because we want to guarantee radius increase.
         if normalized_error > 0 and normalized_error < tolerance:
             # We're within tolerance!
             break
         elif L_lower == L_upper and normalized_error > 0:
+            # End of search. Probably not optimal.
             break
         elif normalized_error < 0:
             # Sampling was too dense when using candidate.
@@ -219,6 +133,12 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
             # Sampling was too sparse when using candidate.
             # Update the lower bound.
             L_lower = L_candidate
+        
+        # Determine new candidate for next search iteration.
+        if L_upper is None:
+            L_candidate = 2 * L_lower
+        else:
+            L_candidate = round((L_lower + L_upper) / 2)
 
         iters += 1
 
@@ -226,7 +146,9 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
         print('knn_fetching_zo_2 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
 
     if verbose and iters == max_iters:
-        print('Warning: reached max_iters in binary search.')
+        print('Warning: Reached max_iters (= {}) in binary search.'.format(max_iters))
+    if verbose and L_lower == L_upper and normalized_error < tolerance:
+        print('Warning: End of binary search. No optimal results for zoom out.')
 
 
     return result
