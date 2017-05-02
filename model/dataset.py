@@ -7,6 +7,7 @@ import os
 import abc
 import numpy as np
 import numpy.ma as ma
+from scipy.spatial.distance import cdist
 from collections import defaultdict
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -100,62 +101,102 @@ class Dataset(QObject):
             return self.centroid()
 
     def knn_pointset(self, n_samples, query_idcs=None, query_dataset=None, remove_query_points=False, k=2, method='tree', sort=True, verbose=2):
-        if query_idcs is not None:
-            indices = np.zeros((query_idcs.size, k), dtype=np.int)
-            dists = np.zeros_like(indices)
-            for i, idx in enumerate(query_idcs):
-                res = self.tree().get_nns_by_item(idx, k, include_distances=True)
-                indices[i, :] = res[0]
-                dists[i, :] = res[1]
-            mask = np.zeros_like(indices, dtype=np.bool)
-            if remove_query_points:
-                for i in range(indices.shape[0]):
-                    mask[i, :] = np.in1d(indices[i, :], query_idcs)
-        elif query_dataset is not None:
-            indices = np.zeros((query_dataset.n_points(), k), dtype=np.int)
-            dists = np.zeros_like(indices)
-            for i in range(query_dataset.n_points()):
-                res = self.tree().get_nns_by_vector(query_dataset.data()[i, :], k, include_distances=True)
-                indices[i, :] = res[0]
-                dists[i, :] = res[1]
-            mask = np.zeros_like(indices, dtype=np.bool)
-            if remove_query_points:
-                for i in range(indices.shape[0]):
-                    mask[i, :] = np.in1d(self.indices()[indices[i, :]], query_dataset.indices())
+        # We're using this function recursively, so timing is more complex.
+        if not hasattr(self, 'knn_pointset_t_0'):
+            self.knn_pointset_t_0 = time.time()
+
+        if method == 'tree':
+            if query_idcs is not None:
+                indices = np.zeros((query_idcs.size, k), dtype=np.int)
+                dists = np.zeros_like(indices)
+                t_0 = time.time()
+                for i, idx in enumerate(query_idcs):
+                    res = self.tree().get_nns_by_item(idx, k, include_distances=True)
+                    indices[i, :] = res[0]
+                    dists[i, :] = res[1]
+                if verbose >= 2:
+                    print('\tQuerying tree took {:.1f} ms.'.format(1000 * (time.time() - t_0)))
+                t_0 = time.time()
+                mask = np.zeros_like(indices, dtype=np.bool)
+                if remove_query_points:
+                    for i in range(indices.shape[0]):
+                        mask[i, :] = np.in1d(indices[i, :], query_idcs)
+                if verbose >= 2:
+                    print('\tMasking indices took {:.1f} ms.'.format(1000 * (time.time() - t_0)))
+            elif query_dataset is not None:
+                indices = np.zeros((query_dataset.n_points(), k), dtype=np.int)
+                dists = np.zeros_like(indices)
+                t_0 = time.time()
+                for i in range(query_dataset.n_points()):
+                    res = self.tree().get_nns_by_vector(query_dataset.data()[i, :], k, include_distances=True)
+                    indices[i, :] = res[0]
+                    dists[i, :] = res[1]
+                if verbose >= 2:
+                    print('\tQuerying tree took {:.1f} ms.'.format(1000 * (time.time() - t_0)))
+                t_0 = time.time()
+                mask = np.zeros_like(indices, dtype=np.bool)
+                if remove_query_points:
+                    for i in range(indices.shape[0]):
+                        mask[i, :] = np.in1d(self.indices()[indices[i, :]], query_dataset.indices())
+                if verbose >= 2:
+                    print('\tMasking indices took {:.1f} ms.'.format(1000 * (time.time() - t_0)))
+            else:
+                raise ValueError('Either query_idcs or query_dataset must be given.')
+
+            m_indices = ma.masked_array(indices, mask=mask)
+            m_dists = ma.masked_array(dists, mask=mask)
+            indices_c = m_indices.compressed()
+            dists_c = m_dists.compressed()
+
+            idx_sort = np.argsort(indices_c)
+            indices_c = indices_c[idx_sort]
+            dists_c = dists_c[idx_sort]
+
+            unique_idcs, idx_starts, counts = np.unique(indices_c, return_index=True, return_counts=True)
+
+            if unique_idcs.size < n_samples:
+                k_new = min(2 * k, self.n_points())
+                print('\t{}-nn was too few (only {} unique results, needed {}) retrying with {}-nn...'.format(k, unique_idcs.size, n_samples, k_new))
+                return self.knn_pointset(n_samples=n_samples, query_idcs=query_idcs, query_dataset=query_dataset, remove_query_points=remove_query_points, k=k_new, method=method, verbose=verbose)
+
+            # Reduce to the smallest distance per unique index.
+            t_0 = time.time()
+            min_dists = np.zeros_like(unique_idcs)
+            for i, (idx_start, count) in enumerate(zip(idx_starts, counts)):
+                min_dists[i] = dists_c[idx_start:idx_start + count].min()
+            if verbose >= 2:
+                print('\tMerging indices and distances took {:.1f} ms.'.format(1000 * (time.time() - t_0)))
+
+            if unique_idcs.size > n_samples:
+                # Use only the n_samples closest samples for the result.
+                closest_idcs = np.argpartition(min_dists, n_samples)[:n_samples]
+                idcs_in_self = unique_idcs[closest_idcs]
+            else:
+                idcs_in_self = unique_idcs
+        elif method == 'bruteforce':
+            if query_idcs is not None:
+                query = self.data()[query_idcs, :]
+            elif query_dataset is not None:
+                query = query_dataset.data()
+            # Compute smallest distances from all root points to all query points.
+            dists = cdist(query, self.data(), metric='euclidean').min(axis=0)
+            # Retrieve indices (in source!) where the distances are smallest
+            if n_samples == dists.size:
+                idcs_in_self = np.arange(n_samples)
+            else:
+                idcs_in_self = np.argpartition(dists, n_samples)[:n_samples]
         else:
-            raise ValueError('Either query_idcs or query_dataset must be given.')
-
-        m_indices = ma.masked_array(indices, mask=mask)
-        m_dists = ma.masked_array(dists, mask=mask)
-        indices_c = m_indices.compressed()
-        dists_c = m_dists.compressed()
-
-        idx_sort = np.argsort(indices_c)
-        indices_c = indices_c[idx_sort]
-        dists_c = dists_c[idx_sort]
-
-        unique_idcs, idx_starts, counts = np.unique(indices_c, return_index=True, return_counts=True)
-
-        if unique_idcs.size < n_samples:
-            print('\t{}-nn was too few (only {} unique results, needed {}) retrying with {}-nn...'.format(k, unique_idcs.size, n_samples, 2*k))
-            return self.knn_pointset(n_samples=n_samples, query_idcs=query_idcs, query_dataset=query_dataset, remove_query_points=remove_query_points, k=2*k, method=method, verbose=verbose)
-
-        # Reduce to the smallest distance per unique index.
-        min_dists = np.zeros_like(unique_idcs)
-        for i, (idx_start, count) in enumerate(zip(idx_starts, counts)):
-            min_dists[i] = dists_c[idx_start:idx_start + count].min()
-
-        if unique_idcs.size > n_samples:
-            # Use only the n_samples closest samples for the result.
-            closest_idcs = np.argpartition(min_dists, n_samples)[:n_samples]
-            idcs_in_self = unique_idcs[closest_idcs]
-        else:
-            idcs_in_self = unique_idcs
+            raise ValueError('Argument \'method\' must be either \'tree\' or \'bruteforce\'.')
 
         if sort:
             idcs_in_self.sort()
 
         data = self.data()[idcs_in_self, :]
         idcs_in_root = self.indices()[idcs_in_self]
-        dataset = Dataset(data, idcs_in_root, name='KNN pointset')
+        dataset = Dataset(data, idcs_in_root, name='KNN pointset ({})'.format(method))
+
+        if verbose:
+            print('knn_pointset ({}) took {:.1f} ms.'.format(method, 1000 * (time.time() - self.knn_pointset_t_0)))
+        del self.knn_pointset_t_0
+
         return dataset

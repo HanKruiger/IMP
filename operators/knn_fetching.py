@@ -8,45 +8,6 @@ from model import Dataset
 from operators.root_selection import root_selection
 from operators.random_sampling import random_sampling
 
-# Return a dataset that contains the n_samples closest points in the root dataset,
-# closest to the root observations corresponding to the samples in query.
-def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, sort=True, verbose=True, return_distances=False):
-    t_0 = time.time()
-
-    if source is None:
-        source = Dataset.root
-
-    # Compute smallest distances from all root points to all query points.
-    dists = cdist(query.data(), source.data(), metric='euclidean').min(axis=0)
-    # Retrieve indices (in source!) where the distances are smallest
-    if n_samples == dists.size:
-        smallest_dist_idcs = np.arange(n_samples)
-    else:
-        smallest_dist_idcs = np.argpartition(dists, n_samples)[:n_samples]
-        
-    # Get the corresponding indices in the root dataset
-    idcs_in_root = source.indices()[smallest_dist_idcs]
-
-    if sort:
-        order = np.argsort(idcs_in_root)
-        idcs_in_root = idcs_in_root[order]
-        smallest_dist_idcs = smallest_dist_idcs[order]
-
-    data = source.data()[smallest_dist_idcs, :]
-    dataset = Dataset(data, idcs_in_root, name='KNN fetching')
-
-    if verbose:
-        print('knn_fetching_naive took {:.2f} seconds.'.format(time.time() - t_0))
-
-    if return_distances:
-        return dataset, dists[smallest_dist_idcs]
-    else:
-        return dataset
-
-# Return a dataset that contains the n_samples closest points in the root dataset,
-# closest to the root observations corresponding to the samples in query.
-def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True, verbose=2):
-    return Dataset.root.knn_pointset(n_samples, query_dataset=query_nd, remove_query_points=True, method='tree')
 
 def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
@@ -70,7 +31,7 @@ def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
     if verbose > 1:
         print('\tSearched for {} neighbours of {} observations.'.format(k, query_nd.n_points()))
         print('\tFound {} observations ({} unique)'.format(indices.size, unique_idcs.size))
-    
+
     if sort:
         unique_idcs.sort()
 
@@ -92,6 +53,7 @@ def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
 
     return dataset
 
+
 def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, tolerance=0.1, max_iters=100):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
 
@@ -101,17 +63,18 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
     L_upper = None
     L_candidate = L_lower
 
-    # Binary (?) search
+    # Binary search
     iters = 0
     while True and iters < max_iters:
         D_s = random_sampling(Dataset.root, L_candidate)
-        result = pointset_knn_naive(query_nd, N_max, source=D_s)
-        
+        # result = pointset_knn_naive(query_nd, N_max, source=D_s)
+        result = D_s.knn_pointset(N_max, query_dataset=query_nd, remove_query_points=False, method='bruteforce')
+
         normalized_error = result.radius() / (zoom_factor * query_nd.radius()) - 1
-        
+
         if verbose > 1:
             print('L search:\n\tcandidate: {}\n\tlower: {}\n\tupper: {}\n\terror: {}'.format(L_candidate, L_lower, L_upper, normalized_error))
-        
+
         # Note: We only accept positive errors, because we want to guarantee radius increase.
         if normalized_error > 0 and normalized_error < tolerance:
             # We're within tolerance!
@@ -133,7 +96,7 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
             # Sampling was too sparse when using candidate.
             # Update the lower bound.
             L_lower = L_candidate
-        
+
         # Determine new candidate for next search iteration.
         if L_upper is None:
             L_candidate = 2 * L_lower
@@ -149,6 +112,5 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, to
         print('Warning: Reached max_iters (= {}) in binary search.'.format(max_iters))
     if verbose and L_lower == L_upper and normalized_error < tolerance:
         print('Warning: End of binary search. No optimal results for zoom out.')
-
 
     return result
