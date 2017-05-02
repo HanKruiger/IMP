@@ -10,7 +10,7 @@ from operators.random_sampling import random_sampling
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
-def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, sort=True, verbose=True):
+def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, sort=True, verbose=True, return_distances=False):
     t_0 = time.time()
 
     if source is None:
@@ -19,7 +19,11 @@ def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, 
     # Compute smallest distances from all root points to all query points.
     dists = cdist(query.data(), source.data(), metric='euclidean').min(axis=0)
     # Retrieve indices (in source!) where the distances are smallest
-    smallest_dist_idcs = np.argpartition(dists, n_samples)[:n_samples]
+    if n_samples == dists.size:
+        smallest_dist_idcs = np.arange(n_samples)
+    else:
+        smallest_dist_idcs = np.argpartition(dists, n_samples)[:n_samples]
+        
     # Get the corresponding indices in the root dataset
     idcs_in_root = source.indices()[smallest_dist_idcs]
 
@@ -34,13 +38,16 @@ def pointset_knn_naive(query, n_samples, source=None, remove_query_points=True, 
     if verbose:
         print('knn_fetching_naive took {:.2f} seconds.'.format(time.time() - t_0))
 
-    return dataset
+    if return_distances:
+        return dataset, dists[smallest_dist_idcs]
+    else:
+        return dataset
 
 # Return a dataset that contains the n_samples closest points in the root dataset,
 # closest to the root observations corresponding to the samples in query.
 def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
-    tree = Dataset.root_tree()
+    tree = Dataset.root.tree()
 
     t_0 = time.time()
 
@@ -122,7 +129,7 @@ def knn_fetching_zi(query_nd, n_samples, k, remove_query_points=True, sort=True,
 
 def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
-    tree = Dataset.root_tree()
+    tree = Dataset.root.tree()
 
     t_0 = time.time()
 
@@ -164,17 +171,62 @@ def knn_fetching_zo(query_nd, k, N_max, sort=True, verbose=2):
 
     return dataset
 
-def knn_fetching_zo_2(query_nd, k, N_max, sort=True, verbose=2):
+def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.2, sort=True, verbose=2, tolerance=0.1, max_iters=100):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
 
-    root_subsampling_size = 5 * N_max
-
     t_0 = time.time()
-    subsampled_root = random_sampling(Dataset.root, root_subsampling_size)
 
-    closest_from_subsampled_root = pointset_knn_naive(query_nd, N_max, source=subsampled_root)
+    L_lower = N_max
+    L_upper = None
+    L_candidate = None
+
+    # Binary (?) search
+    iters = 0
+    while True and iters < max_iters:
+        if L_upper is None:
+            if L_candidate is None:
+                L_candidate = L_lower
+            else:
+                L_candidate = L_lower * 2
+        else:
+            L_candidate = round((L_lower + L_upper) / 2)
+
+        D_s = random_sampling(Dataset.root, L_candidate)
+        result, dists = pointset_knn_naive(query_nd, N_max, source=D_s, return_distances=True)
+        
+        normalized_error = result.radius() / (zoom_factor * query_nd.radius()) - 1
+        
+        if verbose > 1:
+            print('L search:\n\tcandidate: {}\n\tlower: {}\n\tupper: {}\n\terror: {}'.format(L_candidate, L_lower, L_upper, normalized_error))
+        
+        # Note: We do not check for absolute error, because we want to guarantee radius increase.
+        if normalized_error > 0 and normalized_error < tolerance:
+            # We're within tolerance!
+            break
+        elif L_lower == L_upper and normalized_error > 0:
+            break
+        elif normalized_error < 0:
+            # Sampling was too dense when using candidate.
+
+            # If upper value had not been set yet, it means that we should return the sparsest sampling!
+            # (Resulting in the current result, so break!)
+            if L_upper is None and L_lower == N_max:
+                break
+
+            # Otherwise, update the upper bound
+            L_upper = L_candidate
+        elif normalized_error > 0:
+            # Sampling was too sparse when using candidate.
+            # Update the lower bound.
+            L_lower = L_candidate
+
+        iters += 1
 
     if verbose:
-        print('knn_fetching_zo_2 took {:.2f} seconds.\n'.format(time.time() - t_0))
+        print('knn_fetching_zo_2 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
 
-    return closest_from_subsampled_root
+    if verbose and iters == max_iters:
+        print('Warning: reached max_iters in binary search.')
+
+
+    return result

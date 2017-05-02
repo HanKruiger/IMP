@@ -19,7 +19,7 @@ class Dataset(QObject):
     def __init__(self, data, idcs, name='X', is_root=False):
         super().__init__()
         self._data = data
-        self._name = name # Watch it: recursive names are memory hogs
+        self._name = name  # Watch it: recursive names are memory hogs
         self._idcs = idcs
         self._is_root = is_root
 
@@ -36,28 +36,26 @@ class Dataset(QObject):
         except AttributeError:
             print('Root dataset does not exist yet. Labels not set.')
             return False
-        
+
         Dataset.labels = labels
         return True
 
-    @staticmethod
-    def root_tree():
+    def tree(self):
         try:
-            return Dataset.annoy_tree
+            return self._tree
+
         except AttributeError:
             # Build the tree
             print('Building ANN trees.')
             t_0 = time.time()
-            tree = annoy.AnnoyIndex(Dataset.root.n_dimensions())
-            for i in range(Dataset.root.n_points()):
-                tree.add_item(i, Dataset.root.data()[i, :])
+            tree = annoy.AnnoyIndex(self.n_dimensions())
+            for i in range(self.n_points()):
+                tree.add_item(i, self.data()[i, :])
             tree.build(10)
-            Dataset.annoy_tree = tree
+            self._tree = tree
             print('Building trees took {:.2f} s.'.format(time.time() - t_0))
-            
-            # Try again.
-            return Dataset.root_tree()
-            
+
+            return self.tree()
 
     def name(self):
         return self._name
@@ -74,7 +72,7 @@ class Dataset(QObject):
     def destroy(self):
         if self._data is not None:
             del self._data
-    
+
     def data(self):
         return self._data
 
@@ -89,3 +87,13 @@ class Dataset(QObject):
             for own_idx, root_idx in enumerate(self.indices()):
                 self._root_idcs_lookup[root_idx] = own_idx
             return self.root_indices_to_own(root_idcs)
+
+    def radius(self):
+        return self.data().std(axis=0).max()
+
+    def centroid(self):
+        try:
+            return self._centroid
+        except AttributeError:
+            self._centroid = self.data().mean(axis=0)
+            return self.centroid()
