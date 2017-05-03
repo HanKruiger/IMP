@@ -29,7 +29,8 @@ class HyperSphere:
     def set_radius(self, radius):
         self._radius = float(radius)
 
-    # Method by D.E. Knuth, The Art of Computer Programming, vol. 2
+    # Marsaglia, G. (1972). "Choosing a Point from the Surface of a Sphere".
+    # Annals of Mathematical Statistics. 43 (2): 645–646. doi:10.1214/aoms/1177692644
     def sample(self, n_samples=1):
         # Initialize samples from normal distribution.
         samples = np.random.normal(size=(n_samples, self.n_dims()))
@@ -58,3 +59,13 @@ class HyperSphere:
             return inside[0]
         else:
             return inside
+
+    def __contains__(self, entity):
+        if isinstance(entity, HyperSphere):
+            return np.linalg.norm(self.centroid() - entity.centroid()) + entity.radius() <= self.radius()
+        elif isinstance(entity, np.ndarray) or isinstance(entity, list):
+            entity = np.array(entity)
+            if entity.ndim != 1:
+                raise ValueError('\'in\' keyword can only evaluate single points.')
+            else:
+                return self.contains(entity)

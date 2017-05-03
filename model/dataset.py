@@ -14,6 +14,7 @@ from sklearn.manifold import TSNE
 from sklearn.neighbors import KDTree
 import time
 import annoy
+from model.hypersphere import HyperSphere
 
 
 class Dataset(QObject):
@@ -90,8 +91,11 @@ class Dataset(QObject):
                 self._root_idcs_lookup[root_idx] = own_idx
             return self.root_indices_to_own(root_idcs)
 
-    def radius(self):
-        return self.data().std(axis=0).max()
+    def radius(self, smooth=False):
+        if smooth:
+            return self.data().std(axis=0).max()
+        else:
+            return np.abs(self.data()).max()
 
     def centroid(self):
         try:
@@ -99,6 +103,9 @@ class Dataset(QObject):
         except AttributeError:
             self._centroid = self.data().mean(axis=0)
             return self.centroid()
+
+    def bounding_hypersphere(self, smooth=False):
+        return HyperSphere(self.centroid(), self.radius(smooth=smooth))
 
     def knn_pointset(self, n_samples, query_idcs=None, query_dataset=None, remove_query_points=False, k=2, method='tree', sort=True, verbose=2):
         # We're using this function recursively, so timing is more complex.
