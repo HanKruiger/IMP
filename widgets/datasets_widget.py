@@ -70,7 +70,7 @@ class DatasetsWidget(QWidget):
 
         # Use a fraction of the closest points as new representatives
         n_repr = round(repr_fraction * query_2d.n_points() / zoom_fraction)
-        representatives_2d = random_sampling(query_2d, n_repr)
+        representatives_2d = query_2d.random_sampling(n_repr)
         representatives_nd = root_selection(representatives_2d)
 
         # Fetch new points from the big dataset
@@ -79,9 +79,9 @@ class DatasetsWidget(QWidget):
         knn_nd = Dataset.root.knn_pointset(query_dataset=query_nd, n_samples=n_samples, remove_query_points=True)
 
         # Make sure all points from the query are also in the result. (Continuity)
-        closest_nonrepresentatives_2d = difference(query_2d, representatives_2d)
+        closest_nonrepresentatives_2d = query_2d - representatives_2d
         closest_nonrepresentatives_nd = root_selection(closest_nonrepresentatives_2d)
-        nonrepresentatives_nd = union(knn_nd, closest_nonrepresentatives_nd)
+        nonrepresentatives_nd = knn_nd + closest_nonrepresentatives_nd
 
         # Make LAMP embedding of the fetched points, and the non-representative points from the previous frame,
         # using the picked representatives as fixed representatives.
@@ -95,19 +95,20 @@ class DatasetsWidget(QWidget):
         k = round(self.get('zoom_fraction')**(-1) * N_max)
         n_repr = round(N_max * self.get('repr_fraction'))
 
-        the_union = self.dataset_view_renderer.current_union()
-        the_union_nd = root_selection(the_union)
+        query_2d = self.dataset_view_renderer.current_union()
+        query_nd = root_selection(query_2d)
 
-        knn_zo_nd = knn_fetching_zo_2(the_union_nd, N_max=N_max)
+        # knn_zo_nd = knn_fetching_zo_2(query_nd, N_max=N_max)
+        knn_zo_nd = knn_fetching_zo_4(query_nd, N_max, M=1000)
         
         if self.zo_continuity_checkbox.isChecked():
-            representatives_2d = random_sampling(the_union, n_repr)
+            representatives_2d = query_2d.random_sampling(n_repr)
             representatives_nd = root_selection(representatives_2d)
         else:
-            representatives_nd = random_sampling(knn_zo_nd, n_repr)
+            representatives_nd = knn_zo_nd.random_sampling(n_repr)
             representatives_2d = mds_projection(representatives_nd)
         
-        nonrepresentatives_nd = difference(knn_zo_nd, representatives_nd)
+        nonrepresentatives_nd = knn_zo_nd - representatives_nd
         nonrepresentatives_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
 
         self.dataset_view_renderer.interpolate_to_dataset(nonrepresentatives_2d, representatives_2d)
@@ -130,8 +131,8 @@ class DatasetsWidget(QWidget):
             the_union = self.dataset_view_renderer.current_union()
             the_union_nd = root_selection(the_union)
 
-            representatives_nd = random_sampling(the_union_nd, n_repr)
-            nonrepresentatives_nd = difference(the_union_nd, representatives_nd)
+            representatives_nd = the_union_nd.random_sampling(n_repr)
+            nonrepresentatives_nd = the_union_nd - representatives_nd
 
         # Reproject the nd datapoints
         representatives_2d = mds_projection(representatives_nd)
@@ -149,13 +150,13 @@ class DatasetsWidget(QWidget):
 
         # Subsample the dataset, if necessary.
         if dataset.n_points() > n_points:
-            dataset = random_sampling(dataset, n_points)
+            dataset = dataset.random_sampling(n_points)
 
         n_repr = round(repr_fraction * dataset.n_points())
 
         # Subsample the dataset for representatives.
-        representatives_nd = random_sampling(dataset, n_repr)
-        nonrepresentatives_nd = difference(dataset, representatives_nd)
+        representatives_nd = dataset.random_sampling(n_repr)
+        nonrepresentatives_nd = dataset - representatives_nd
 
         if dataset.n_dimensions() > 2:
             # Project with MDS+LAMP

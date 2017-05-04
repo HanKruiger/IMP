@@ -63,6 +63,9 @@ class Dataset(QObject):
     def name(self):
         return self._name
 
+    def set_name(self, new_name):
+        self._name = new_name
+
     def n_points(self):
         return self.data().shape[0]
 
@@ -90,6 +93,66 @@ class Dataset(QObject):
             for own_idx, root_idx in enumerate(self.indices()):
                 self._root_idcs_lookup[root_idx] = own_idx
             return self.root_indices_to_own(root_idcs)
+
+    def __add__(self, other, sort=True):
+        assert(isinstance(other, Dataset))
+        assert(other.n_dimensions() == self.n_dimensions())
+        assert(np.intersect1d(other.indices(), self.indices()).size == 0)
+
+        root_idcs = np.concatenate((self.indices(), other.indices()), axis=0)
+        data = np.concatenate((self.data(), other.data()), axis=0)
+        
+        if sort:
+            order = np.argsort(root_idcs)
+            root_idcs = root_idcs[order]
+            data = data[order, :]
+        
+        union = Dataset(data, root_idcs, name='Union')
+        return union
+
+    def __sub__(self, other):
+        idcs_in_root = np.setdiff1d(self.indices(), other.indices())
+        # Assumes self.indices() is sorted.
+        idcs_in_self = np.searchsorted(self.indices(), idcs_in_root)
+
+        difference = self.select_indices(idcs_in_self)
+        difference.set_name('Difference')
+        return difference
+
+    def select_logical(self, bool_values):
+        assert(bool_values.size == self.n_points())
+
+        # Make sure they're actually booleans, so slicing happens correctly.
+        bool_values = np.array(bool_values, dtype=np.bool)
+
+        root_idcs = self.indices()[bool_values]
+        data = self.data()[bool_values, :]
+        selection = Dataset(data, root_idcs, name='Logical selection')
+        return selection
+
+    def select_indices(self, indices):
+        # Make sure they're actually integer indices, so slicing happens correctly.
+        indices_in_self = np.array(indices, dtype=np.int)
+
+        root_idcs = self.indices()[indices_in_self]
+        data = self.data()[indices_in_self, :]
+        selection = Dataset(data, root_idcs, name='Logical selection')
+        return selection
+
+    def random_sampling(self, M, sort=True):
+        if M < self.n_points():
+            idcs_in_self = np.random.choice(self.n_points(), M, replace=False)
+            if sort:
+                idcs_in_self.sort()
+        else:
+            from warnings import warn
+            warn('Sample size larger than (or eq. to) source. Using all source samples.', RuntimeWarning)
+            idcs_in_self = np.arange(self.n_points())
+
+        root_idcs = self.indices()[idcs_in_self]
+        data = self.data()[idcs_in_self, :]
+        sampling = Dataset(data, root_idcs, name='Random sampling')
+        return sampling
 
     def radius(self, smooth=False):
         if smooth:
@@ -207,3 +270,4 @@ class Dataset(QObject):
         del self.knn_pointset_t_0
 
         return dataset
+

@@ -7,7 +7,6 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from model import *
-from operators import union
 from utils.buffers import *
 
 
@@ -85,7 +84,7 @@ class DatasetView:
             datasets = self.datasets(old_or_new)
             the_union = datasets[0]
             for dataset in datasets[1:]:
-                the_union = union(the_union, dataset)
+                the_union = the_union + dataset
 
             if old_or_new == 'new':
                 self._union_new = the_union
