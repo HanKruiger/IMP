@@ -58,10 +58,10 @@ class GLWidget(QOpenGLWidget):
             self.dataset_view_renderer.next()
 
     def minimumSizeHint(self):
-        return QSize(50, 50)
+        return QSize(500, 500)
 
     def sizeHint(self):
-        return QSize(400, 400)
+        return QSize(500, 500)
 
     def initializeGL(self):
         self.gl = self.context().versionFunctions()
