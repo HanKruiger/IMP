@@ -187,7 +187,8 @@ def knn_fetching_zo_3(query_nd, N_max, zoom_factor=1.3, sort=True, verbose=2, to
 
     return result
 
-def knn_fetching_zo_4(query_nd, N_max, M, new_fraction=0.5, sort=True, verbose=2):
+# TODO: Make this compatible with k > 1
+def knn_fetching_zo_4(query_nd, N_max, M, new_fraction=0.5, k=1, sort=True, verbose=2):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
 
     t_0 = time.time()
@@ -210,9 +211,10 @@ def knn_fetching_zo_4(query_nd, N_max, M, new_fraction=0.5, sort=True, verbose=2
             D_s_outside_sphere = D_s.select_logical(~sphere.contains(D_s.data()))
             # Just to be sure, remove any points from query_nd_subsampled.
             D_s_outside_sphere = D_s_outside_sphere.select_logical(~np.in1d(D_s_outside_sphere.indices(), query_nd_subsampled.indices()))
-            singleton_dataset = D_s_outside_sphere.knn_pointset(1, query_dataset=query_nd, method='bruteforce', verbose=False)
+            singleton_dataset = D_s_outside_sphere.knn_pointset(k, query_dataset=query_nd, method='bruteforce', verbose=False)
             new_idx = singleton_dataset.indices()[0]
 
+        print('{}/{}'.format(i, N_fetch))
         fetched_idcs[i] = new_idx
     
     fetched_data = Dataset.root.data()[fetched_idcs, :] # Is it faster to also fill this in the loop?
