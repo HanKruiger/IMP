@@ -1,7 +1,16 @@
 annoy==1.8.3
-numpy==1.12.1
+cycler==0.10.0
+matplotlib==2.0.2
+numpy==1.13.0
+py==1.4.34
+pyflann3==1.8.4
+pyparsing==2.2.0
 PyQt5==5.8.2
 PyQtChart==5.8
+pytest==3.1.1
+python-dateutil==2.6.0
+pytz==2017.2
 scikit-learn==0.18.1
 scipy==0.19.0
 sip==4.19.2
+six==1.10.0
