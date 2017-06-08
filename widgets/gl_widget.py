@@ -49,13 +49,20 @@ class GLWidget(QOpenGLWidget):
         self.update()
 
     def keyPressEvent(self, key_event):
-        if key_event.key() == Qt.Key_Z:
+        if key_event.key() == Qt.Key_Comma:
             key_event.accept()
-            self.hierarchical_zoom()
-        elif key_event.key() == Qt.Key_Comma:
             self.dataset_view_renderer.previous()
         elif key_event.key() == Qt.Key_Period:
+            key_event.accept()
             self.dataset_view_renderer.next()
+
+        if key_event.modifiers() & Qt.ControlModifier:
+            if key_event.key() == Qt.Key_Plus:
+                key_event.accept()
+                self.nd_zoom_in()
+            elif key_event.key() == Qt.Key_Minus:
+                key_event.accept()
+                self.nd_zoom_out()
 
     def minimumSizeHint(self):
         return QSize(500, 500)
