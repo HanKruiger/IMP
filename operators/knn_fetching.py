@@ -53,7 +53,7 @@ def knn_fetching_zo_1(query_nd, k, N_max, sort=True, verbose=2):
     return dataset
 
 
-def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.1, sort=True, verbose=2, tolerance=0.1, max_iters=100):
+def knn_fetching_zo_2_1(query_nd, N_max, zoom_factor=1.1, sort=True, verbose=2, tolerance=0.1, max_iters=100):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
 
     t_0 = time.time()
@@ -108,7 +108,7 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.1, sort=True, verbose=2, to
         iters += 1
 
     if verbose:
-        print('knn_fetching_zo_2 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
+        print('ZO2.1 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
 
     if verbose and iters == max_iters:
         print('Warning: Reached max_iters (= {}) in binary search.'.format(max_iters))
@@ -117,7 +117,7 @@ def knn_fetching_zo_2(query_nd, N_max, zoom_factor=1.1, sort=True, verbose=2, to
 
     return result
 
-def knn_fetching_zo_3(query_nd, N_max, zoom_factor=1.3, sort=True, verbose=2, tolerance=0.05, max_iters=100):
+def knn_fetching_zo_2_2(query_nd, N_max, zoom_factor=1.3, sort=True, verbose=2, tolerance=0.05, max_iters=100):
     assert(Dataset.root.n_dimensions() == query_nd.n_dimensions())
 
     t_0 = time.time()
@@ -137,6 +137,9 @@ def knn_fetching_zo_3(query_nd, N_max, zoom_factor=1.3, sort=True, verbose=2, to
         result = D_s.knn_pointset(N_max, query_dataset=query_nd, remove_query_points=False, method='bruteforce')
 
         points_in_sphere = sphere_query.contains(result.data()).sum()
+        if points_in_sphere == 0:
+            continue
+            
         a = result.n_points() / points_in_sphere
 
         error = a - a_star
@@ -178,7 +181,7 @@ def knn_fetching_zo_3(query_nd, N_max, zoom_factor=1.3, sort=True, verbose=2, to
         iters += 1
 
     if verbose:
-        print('knn_fetching_zo_2 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
+        print('ZO2.2 took {:.2f} seconds. ({} search iterations)\n'.format(time.time() - t_0, iters))
 
     if verbose and iters == max_iters:
         print('Warning: Reached max_iters (= {}) in binary search.'.format(max_iters))
@@ -214,7 +217,8 @@ def knn_fetching_zo_4(query_nd, N_max, M, new_fraction=0.5, k=1, sort=True, verb
             singleton_dataset = D_s_outside_sphere.knn_pointset(k, query_dataset=query_nd, method='bruteforce', verbose=False)
             new_idx = singleton_dataset.indices()[0]
 
-        print('{}/{}'.format(i, N_fetch))
+        if verbose > 1:
+            print('{}/{}'.format(i, N_fetch))
         fetched_idcs[i] = new_idx
     
     fetched_data = Dataset.root.data()[fetched_idcs, :] # Is it faster to also fill this in the loop?
@@ -222,5 +226,8 @@ def knn_fetching_zo_4(query_nd, N_max, M, new_fraction=0.5, k=1, sort=True, verb
 
     # Take union of the subsampled query and the newly fetched dataset.
     result = query_nd_subsampled + fetched_dataset
+
+    if verbose:
+        print('ZO4 took {:.2f} seconds.'.format(time.time() - t_0))
 
     return result

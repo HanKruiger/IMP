@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+import time
 from model import *
 from widgets import Slider, FileDropWidget
 from operators import *
@@ -59,11 +60,13 @@ class DatasetsWidget(QWidget):
         self.vbox_main.addLayout(drops_hbox)
         self.setLayout(self.vbox_main)
 
-    def nd_zoom_in(self, mouse_pos):
+    def nd_zoom_in(self, mouse_pos, verbose=1):
         zoom_fraction = self.get('zoom_fraction')
         repr_fraction = self.get('repr_fraction')
         N_max = self.get('N_max')
         
+        t_0 = time.time()
+
         # Get the fraction of closest points to the mouse.
         the_union = self.dataset_view_renderer.current_union()
         query_2d = knn_selection(the_union, n_samples=round(the_union.n_points() * zoom_fraction), pos=mouse_pos)
@@ -87,6 +90,9 @@ class DatasetsWidget(QWidget):
         # using the picked representatives as fixed representatives.
         new_neighbours_2d = lamp_projection(nonrepresentatives_nd, representatives_nd, representatives_2d)
         
+        if verbose:
+            print('nD zoom-in took {:.2f} seconds.\n'.format(time.time() - t_0))        
+
         # Schedule that the projection is shown.
         self.dataset_view_renderer.interpolate_to_dataset(new_neighbours_2d, representatives_2d)
 
@@ -98,8 +104,10 @@ class DatasetsWidget(QWidget):
         query_2d = self.dataset_view_renderer.current_union()
         query_nd = root_selection(query_2d)
 
-        # knn_zo_nd = knn_fetching_zo_2(query_nd, N_max=N_max)
-        knn_zo_nd = knn_fetching_zo_4(query_nd, N_max, M=1000)
+        # knn_zo_nd = knn_fetching_zo_1(query_nd, 1000, N_max)
+        # knn_zo_nd = knn_fetching_zo_2_1(query_nd, N_max=N_max, zoom_factor=1.2)
+        knn_zo_nd = knn_fetching_zo_2_2(query_nd, N_max=N_max, zoom_factor=1.2)
+        # knn_zo_nd = knn_fetching_zo_4(query_nd, N_max, M=1000)
         
         if self.zo_continuity_checkbox.isChecked():
             representatives_2d = query_2d.random_sampling(n_repr)
