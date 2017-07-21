@@ -19,7 +19,7 @@ in float v_colour;
 out float f_colour;
 flat out uint f_has_old;
 flat out uint f_has_new;
-flat out uint f_is_repr;
+flat out uint f_is_repr_old;
 flat out uint f_is_repr_new;
 
 void main() {
@@ -44,7 +44,7 @@ void main() {
 	
 	f_colour = v_colour;
 
-	f_is_repr = v_is_repr_old;
+	f_is_repr_old = v_is_repr_old;
 	f_is_repr_new = v_is_repr_new;
 	f_has_old = v_has_old;
 	f_has_new = v_has_new;
