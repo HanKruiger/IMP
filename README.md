@@ -14,12 +14,14 @@ The code for this project lives in different modules. Here are the most importan
 
 IMP uses [Qt5](https://www1.qt.io/download/), which should be installed manually.
 Other than this, its dependencies are managed by `pip3`, Python's package manager.
+The list of packages is in `requirements.txt` and these are installed as listed below.
 
 ## Run
 
 First, create a virtual environment and (locally) install the required packages:
 
 ```bash
+cd IMP
 python3 -m venv venv
 source ./venv/bin/activate
 pip3 install -r requirements.txt
